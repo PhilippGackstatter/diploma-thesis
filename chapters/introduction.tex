@@ -1,11 +1,11 @@
 \definecolor{BrightOrange}{HTML}{8c14ee}
 \definecolor{DarkOrange}{HTML}{401159}
 
-%\usemintedstyle{friendly}
+\usemintedstyle{friendly}
 
 % Minted Inline
 \definecolor{friendlybg}{HTML}{f0f0f0}
-%\newcommand{\inl}[1]{\mintinline[style=friendly,bgcolor=friendlybg]{shell}|#1|}
+\newcommand{\inl}[1]{\mintinline[style=friendly,bgcolor=friendlybg]{shell}|#1|}
 
 \newcommand{\quot}[1]{\foreignquote{german}{#1}}
 
@@ -22,7 +22,7 @@ In this computing model, cloud service providers offer to execute functions writ
 
 \medskip
 
-To enable low-latency edge computing on resource-constrained devices, serverless is an ideal framework. Single functions are lightweight enough to be deployed on these devices, where entire applications are not. But executing functions in container runtimes on resource-constrained devices will only exacerbate the cold-start problem. Thus, a more scalable and lightweight runtime is needed. One way to achieve this, is to replace the container runtime with one based on WebAssembly (Wasm) such as in \cite{Hall2019} and \cite{Murphy2020}. Wasm is a portable, binary instruction format for memory-safe, sandboxed execution in a virtual machine \cite{W3C2020}. Its portability means that it can be executed wherever an executor exists. Thus, a serverless computing platform only needs to provide a Wasm runtime for the instruction set architectures of its edge devices. Then, a function can be easily moved between architecturally heterogeneous devices. Its sandboxing features enables Wasm to be used for the execution of arbitrary, user-supplied code without compromising the security of a multi-tenant system. Finally, Wasm executors can be created and destroyed in a matter of microseconds. The cloud provider Fastly has recently begun offering execution of Wasm modules on its FaaS platform through the use of their lucet executor. On their blog they write:
+To enable low-latency edge computing on resource-constrained devices, serverless is an ideal framework. Single functions are lightweight enough to be deployed on these devices, where entire applications are not. But executing functions in container runtimes on resource-constrained devices will only exacerbate the cold-start problem. Thus, a more scalable and lightweight runtime is needed. One way to achieve this, is to replace the container runtime with one based on WebAssembly (Wasm) such as in \cite{Hall2019} and \cite{Murphy2020}. Wasm is a portable, binary instruction format for memory-safe, sandboxed execution in a virtual machine \cite{W3C2020}. Its portability means that it can be executed wherever an executor exists. Thus, a serverless computing platform only needs to provide a Wasm runtime for the instruction set architectures of its edge devices. Then, a function can be easily moved between architecturally heterogeneous devices. Its sandboxing features enables Wasm to be used for the execution of arbitrary, user-supplied code without compromising the security of a multi-tenant system. Finally, Wasm executors can be created and destroyed in a matter of microseconds. The cloud provider Fastly has recently begun offering execution of Wasm modules on its FaaS platform through the use of their \inl{lucet} executor. On their blog they write:
 
 \begin{quote}
   \quot{Lucet can instantiate WebAssembly modules in under 50 microseconds, with just a few kilobytes of memory overhead. By comparison, Chromium’s V8 engine takes about 5 milliseconds, and tens of megabytes of memory overhead, to instantiate JavaScript or WebAssembly programs.} \cite{fastly2019}
