@@ -1,0 +1,44 @@
+\definecolor{BrightOrange}{HTML}{8c14ee}
+\definecolor{DarkOrange}{HTML}{401159}
+
+%\usemintedstyle{friendly}
+
+% Minted Inline
+\definecolor{friendlybg}{HTML}{f0f0f0}
+%\newcommand{\inl}[1]{\mintinline[style=friendly,bgcolor=friendlybg]{shell}|#1|}
+
+\newcommand{\quot}[1]{\foreignquote{german}{#1}}
+
+\section{Motivation}
+
+With the growing number of Internet of Things (IoT) devices, the limitations of today's cloud computing platforms have become apparent. Supporting low latency in use cases like data analytics and machine learning requires moving away from the cloud-centric model \cite{Nastic2017}, \cite{Rausch2019}. Serverless computing, or Function-as-a-Service (FaaS), has emerged as a solution.
+
+\begin{quote}
+  \quot{Serverless computing is an emerging cloud-based execution model in which user-defined functions are seamlessly and transparently hosted and managed by a distributed platform.} \cite{Nastic2017}
+\end{quote}
+
+In this computing model, cloud service providers offer to execute functions written in a programming language of the developer's choice. This is most often facilitated by the use of a container technology, such as Docker. The container enables practical execution of any program, as it contains all its dependencies. Through this mechanism, it also isolates one executing function from another to securely enable multi-tenancy on shared physical hosts. While this works well on the level of Software-as-a-Service, it has problems on the finer-grained Function-as-a-Service (FaaS) level. Once containers are running, they allow execution of programs at native speeds. However, in serverless environments, the need to quickly create and destroy functions arises. When a function is first executed, its container must be started. This can introduce latency in the order of a few hundred milliseconds to seconds \cite{Manner2018} and gets exponentially worse under concurrent workloads \cite{Mohan2019}. The first invocation of a function may thus spend more than 99\% of its time in the setup of the execution environment. This has been coined the cold-start problem. 
+% This problem has been partially addressed by keeping containers \quot{warm} in-between requests. However this is opposed to the serverless promise of being able to scale to zero.
+
+\medskip
+
+To enable low-latency edge computing on resource-constrained devices, serverless is an ideal framework. Single functions are lightweight enough to be deployed on these devices, where entire applications are not. But executing functions in container runtimes on resource-constrained devices will only exacerbate the cold-start problem. Thus, a more scalable and lightweight runtime is needed. One way to achieve this, is to replace the container runtime with one based on WebAssembly (Wasm) such as in \cite{Hall2019} and \cite{Murphy2020}. Wasm is a portable, binary instruction format for memory-safe, sandboxed execution in a virtual machine \cite{W3C2020}. Its portability means that it can be executed wherever an executor exists. Thus, a serverless computing platform only needs to provide a Wasm runtime for the instruction set architectures of its edge devices. Then, a function can be easily moved between architecturally heterogeneous devices. Its sandboxing features enables Wasm to be used for the execution of arbitrary, user-supplied code without compromising the security of a multi-tenant system. Finally, Wasm executors can be created and destroyed in a matter of microseconds. The cloud provider Fastly has recently begun offering execution of Wasm modules on its FaaS platform through the use of their lucet executor. On their blog they write:
+
+\begin{quote}
+  \quot{Lucet can instantiate WebAssembly modules in under 50 microseconds, with just a few kilobytes of memory overhead. By comparison, Chromium’s V8 engine takes about 5 milliseconds, and tens of megabytes of memory overhead, to instantiate JavaScript or WebAssembly programs.} \cite{fastly2019}
+\end{quote}
+
+Thus, Wasm runtimes may not suffer from a noticeable cold-start.
+In summary, Wasm allows for secure, portable and fast execution. With these properties it may be a good replacement for containers on edge computers. One of the founders of Docker even commented:
+
+\begin{quote}
+  \quot{If WASM+WASI existed in 2008, we wouldn't have needed to created Docker. That's how important it is. Webassembly on the server is the future of computing.} \cite{Hykes2019}
+\end{quote}
+
+% \begin{itemize}
+%   \item IoT devices which consume edge resources frequently, are often event-driven. This is a great fit for serverless, as the function can be called exactly when it is needed, provisioned by the platform, then destroyed
+%   \item While Docker introduces almost no overhead for cpu-intensive workloads, the cold-start problem may be exacerbated by the less powerful hardware
+% \item In containers, the runtime for an interpreted language such as Python or JavaScript needs to be shipped. If we can compile these languages to Wasm, then no additional runtime needs to be shipped. This is code that doesn't need to be downloaded on every invocation from the database.
+% \end{itemize}
+
+This promising outlook shall be examined more closely in this work. We will implement a Wasm runtime, using different Wasm executors, in Apache OpenWhisk and compare it to the existing container runtime.

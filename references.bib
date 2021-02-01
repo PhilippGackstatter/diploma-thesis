@@ -1,0 +1,155 @@
+% Encoding: UTF-8
+
+@InProceedings{Hall2019,
+  author    = {Hall, Adam and Ramachandran, Umakishore},
+  booktitle = {Proceedings of the International Conference on Internet of Things Design and Implementation},
+  title     = {An Execution Model for Serverless Functions at the Edge},
+  doi       = {10.1145/3302505.3310084},
+  isbn      = {9781450362832},
+  location  = {Montreal, Quebec, Canada},
+  pages     = {225–236},
+  publisher = {Association for Computing Machinery},
+  series    = {IoTDI '19},
+  url       = {https://doi.org/10.1145/3302505.3310084},
+  abstract  = {Serverless computing platforms allow developers to host single-purpose applications that automatically scale with demand. In contrast to traditional long-running applications on dedicated, virtualized, or container-based platforms, serverless applications are intended to be instantiated when called, execute a single function, and shut down when finished. State-of-the-art serverless platforms achieve these goals by creating a new container instance to host a function when it is called and destroying the container when it completes. This design allows for cost and resource savings when hosting simple applications, such as those supporting IoT devices at the edge of the network. However, the use of containers introduces some overhead which may be unsuitable for applications requiring low-latency response or hardware platforms with limited resources, such as those served by edge computing environments. In this paper, we present a nomenclature for characterizing server-less function access patterns which allows us to derive the basic requirements of a serverless computing runtime. We then propose the use of WebAssembly as an alternative method for running serverless applications while meeting these requirements. Finally, we demonstrate how a WebAssembly-based serverless platform provides many of the same isolation and performance guarantees of container-based platforms while reducing average application start times and the resources needed to host them.},
+  address   = {New York, NY, USA},
+  keywords  = {webassembly, serverless, edge computing, function-as-a-service, FaaS, fog computing},
+  numpages  = {12},
+  year      = {2019},
+}
+
+@InProceedings{Murphy2020,
+  author    = {Murphy, Se{\'a}n and Persaud, Leonardas and Martini, William and Bosshard, Bill},
+  booktitle = {Agile Processes in Software Engineering and Extreme Programming -- Workshops},
+  title     = {On the Use of Web Assembly in a Serverless Context},
+  editor    = {Paasivaara, Maria and Kruchten, Philippe},
+  isbn      = {978-3-030-58858-8},
+  pages     = {141--145},
+  publisher = {Springer International Publishing},
+  abstract  = {This paper considers how WASM can be run in different serverless contexts. A comparison of different serverside WASM runtime options is considered, specifically focused on wasmer, wasmtime and lucet. Next, different options for running WASM within two serverless platforms -- Openwhisk and AWS Lambdai -- are compared. Initial results show that a solution which uses the built-in node.js WASM supports is found to work better than using the dedicated WASM runtimes but this has limitations and providing more direct integration with WASM runtimes should be explored further.},
+  address   = {Cham},
+  year      = {2020},
+}
+
+@InProceedings{Manner2018,
+  author    = {J. {Manner} and M. {Endreß} and T. {Heckel} and G. {Wirtz}},
+  booktitle = {2018 IEEE/ACM International Conference on Utility and Cloud Computing Companion (UCC Companion)},
+  title     = {Cold Start Influencing Factors in Function as a Service},
+  doi       = {10.1109/UCC-Companion.2018.00054},
+  pages     = {181-188},
+  year      = {2018},
+}
+
+@InProceedings{Mohan2019,
+  author    = {Anup Mohan and Harshad Sane and Kshitij Doshi and Saikrishna Edupuganti and Naren Nayak and Vadim Sukhomlinov},
+  booktitle = {11th {USENIX} Workshop on Hot Topics in Cloud Computing (HotCloud 19)},
+  title     = {Agile Cold Starts for Scalable Serverless},
+  publisher = {{USENIX} Association},
+  url       = {https://www.usenix.org/conference/hotcloud19/presentation/mohan},
+  address   = {Renton, WA},
+  month     = jul,
+  year      = {2019},
+}
+
+@Misc{W3C2020,
+  author  = {W3C},
+  date    = {2020-10-25},
+  title   = {WebAssembly Website},
+  url     = {https://webassembly.org/},
+  urldate = {2020-10-25},
+}
+
+@Misc{fastly2019,
+  author  = {fastly},
+  date    = {2019-03-29},
+  title   = {Announcing Lucet: Fastly’s native WebAssembly compiler and runtime},
+  url     = {https://www.fastly.com/blog/announcing-lucet-fastly-native-webassembly-compiler-runtime},
+  urldate = {2020-10-25},
+}
+
+@Misc{Hykes2019,
+  author  = {Solomon Hykes},
+  date    = {2019-03-27},
+  title   = {WASM+WASI Tweet},
+  url     = {https://twitter.com/solomonstre/status/1111004913222324225},
+  urldate = {2020-10-25},
+}
+
+@Misc{Apache2020,
+  author  = {Apache},
+  date    = {2020-10-26},
+  title   = {Apache OpenWhisk},
+  url     = {https://openwhisk.apache.org/},
+  urldate = {2020-10-26},
+}
+﻿
+
+@MastersThesis{Napieralla2020,
+  author = {Napieralla, Jonah},
+  title  = {Considering WebAssembly Containers for Edge Computing on Hardware-Constrained IoT Devices},
+  year   = {2020},
+}
+
+@Misc{Alliance2020,
+  author  = {Bytecode Alliance},
+  date    = {2020-10-30},
+  title   = {Cache Configuration of wasmtime},
+  url     = {https://docs.wasmtime.dev/cli-cache.html#how-does-the-cache-work},
+  urldate = {2020-10-30},
+}
+
+@Article{Nastic2017,
+  author  = {S. {Nastic} and T. {Rausch} and O. {Scekic} and S. {Dustdar} and M. {Gusev} and B. {Koteska} and M. {Kostoska} and B. {Jakimovski} and S. {Ristov} and R. {Prodan}},
+  title   = {A Serverless Real-Time Data Analytics Platform for Edge Computing},
+  doi     = {10.1109/MIC.2017.2911430},
+  number  = {4},
+  pages   = {64-71},
+  volume  = {21},
+  journal = {IEEE Internet Computing},
+  year    = {2017},
+}
+
+@InProceedings{Rausch2019,
+  author    = {Thomas Rausch and Waldemar Hummer and Vinod Muthusamy and Alexander Rashed and Schahram Dustdar},
+  booktitle = {2nd {USENIX} Workshop on Hot Topics in Edge Computing (HotEdge 19)},
+  title     = {Towards a Serverless Platform for Edge {AI}},
+  publisher = {{USENIX} Association},
+  url       = {https://www.usenix.org/conference/hotedge19/presentation/rausch},
+  address   = {Renton, WA},
+  month     = jul,
+  year      = {2019},
+}
+
+@Misc{Wasmer2020,
+  author  = {Wasmer, Inc.},
+  date    = {2020-12-01},
+  title   = {Wasmer Website},
+  url     = {https://wasmer.io/},
+  urldate = {2020-12-01},
+}
+
+@Misc{Alliance2020a,
+  author  = {Bytecode Alliance},
+  date    = {2020-11-01},
+  title   = {WebAssembly Micro Runtime GitHub},
+  url     = {https://github.com/bytecodealliance/wasm-micro-runtime/},
+  urldate = {2020-11-01},
+}
+
+@Misc{Alliance2020c,
+  author  = {Bytecode Alliance},
+  date    = {2020-11-01},
+  title   = {Wasmtime Website},
+  url     = {https://wasmtime.dev/},
+  urldate = {2020-11-01},
+}
+
+@Misc{Alliance2020b,
+  author  = {Bytecode Alliance},
+  date    = {2020-11-01},
+  title   = {Lucet GitHub},
+  url     = {https://github.com/bytecodealliance/lucet},
+  urldate = {2020-11-01},
+}
+
+@Comment{jabref-meta: databaseType:biblatex;}
