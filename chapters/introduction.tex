@@ -19,8 +19,9 @@ With the growing number of Internet of Things (IoT) devices, the limitations of 
   \quot{Serverless computing is an emerging cloud-based execution model in which user-defined functions are seamlessly and transparently hosted and managed by a distributed platform.} \cite{Nastic2017}
 \end{quote}
 
-In this computing model, cloud service providers offer to execute functions written in a programming language of the developer's choice. This is most often facilitated by the use of a container technology, such as Docker. The container enables practical execution of any program, as it contains all its dependencies. Through this mechanism, it also isolates one executing function from another to securely enable multi-tenancy on shared physical hosts. While this works well on the level of Software-as-a-Service, it has problems on the finer-grained Function-as-a-Service (FaaS) level. Once containers are running, they allow execution of programs at native speeds. However, in serverless environments, the need to quickly create and destroy functions arises. When a function is first executed, its container must be started. This can introduce latency in the order of a few hundred milliseconds to seconds \cite{Manner2018} and gets exponentially worse under concurrent workloads \cite{Mohan2019}. The first invocation of a function may thus spend more than 99\% of its time in the setup of the execution environment. This has been coined the cold-start problem. 
+In this computing model, cloud service providers offer to execute functions written in a programming language of the developer's choice. This is most often facilitated by the use of a container technology, such as Docker. The container enables practical execution of any program, as it contains all its dependencies. Through this mechanism, it also isolates one executing function from another to securely enable multi-tenancy on shared physical hosts. While this works well on the level of Software-as-a-Service, it has problems on the finer-grained Function-as-a-Service (FaaS) level. Once containers are running, they allow execution of programs at native speeds. However, in serverless environments, the need to quickly create and destroy functions arises. When a function is first executed, its container must be started. This can introduce latency in the order of a few hundred milliseconds to seconds \cite{Manner2018} and gets exponentially worse under concurrent workloads \cite{Mohan2019}. The setup of the execution environment may thus contribute a significant part to the end-to-end time it takes to invoke a function for the first time. This has been coined the cold-start problem.
 % This problem has been partially addressed by keeping containers \quot{warm} in-between requests. However this is opposed to the serverless promise of being able to scale to zero.
+
 
 \medskip
 
@@ -44,3 +45,37 @@ In summary, Wasm allows for secure, portable and fast execution. With these prop
 % \end{itemize}
 
 This promising outlook shall be examined more closely in this work. We will implement a Wasm runtime, using different Wasm executors, in Apache OpenWhisk and compare it to the existing container runtime.
+
+\section{Aim of the Work}
+
+The goal of this work is to evaluate the viability of WebAssembly in serverless computing in the context of edge computing. We asses that by implementing a Wasm runtime for serverless computing to answer these research questions.
+
+\begin{enumerate}
+  % \item What are the challenges in adding a Wasm runtime to OpenWhisk? 
+
+  % \item What are the benefits and drawbacks of a WebAssembly runtime in OpenWhisk?
+
+  % \item What are the differences in creating a function using WebAssembly rather than containers?
+
+  % \item How suitable are the various WebAssembly runtimes for the use on heterogeneous edge computers?
+  % Which of the evaluated WebAssembly runtimes is the most appropriate one for the use on edge computers / in a heterogeneous environment?
+  % \begin{itemize}
+  %   \item Performance
+  %   \item heterogeneous -> Architecture support
+  %   \item heterogeneous -> Which one scales from a raspi pi to a powerful cloudlet?
+  % \end{itemize}
+
+  \item How suitable are the runtimes for the use on heterogeneous edge computers?
+
+  \item How do the performance characteristics of the Wasm and container runtimes differ?
+
+  \item By how much can the cold-start problem be alleviated under the Wasm runtimes?
+
+        %   \item How do the wasm-based runtimes fare against the existing container solution in OpenWhisk? Can the cold-start problem be alleviated? Are there use-cases where containers are still more appropriate?
+        %   \begin{itemize}
+        %     \item Performance comparison
+        %     \item cold-start?
+        %     \item for highly-invoked functions, maybe containers are still better due to native speed. But lucet may be a serious contender here.
+        %     \item If something like JavaScript can actually be compiled to wasm and then to native code, it may be a lot faster than running in a node.js environment. So there may even be potential for interpeted languages to gain performance!
+        %   \end{itemize}
+\end{enumerate}

@@ -1,1 +1,23 @@
 \chapter{Background}
+
+In this chapter we establish a common background for serverless computing and WebAssembly.
+
+\section{Serverless computing}
+
+\section{Serverless workload}
+
+\citeauthor{Shahrad2020} have characterized the serverless workload at a large cloud-provider, Microsoft Azure. Because of their large number of users, this study can be considered very representative of the average workload.
+They find that on average 81\% of the functions are invoked less than once per minute. However, those accessed more frequently make up 99.6\% of all invocations \cite{Shahrad2020}.
+Those frequently accessed functions should thus be kept in memory, to avoid the cold start entirely. The less frequently accessed functions should not be kept in memory, but created, executed and destroyed immediately, in order to save resources. For this to be viable, the cold-start needs to be a cheap operation. In general, the cheaper the cold start, the smaller the amount of time that functions need to be kept in memory.
+
+\citeauthor{Shahrad2020} also find that on average, 50\% of functions execute for less than one second.
+
+\begin{quote}
+    \quot{The main implication is that the function execution times are at the same order of magnitude as the cold start times reported for major providers. \emph{This makes avoiding and/or optimizing cold starts extremely important for the overall performance of a FaaS offering} \cite{Shahrad2020}.}
+\end{quote}
+
+Because of that, the primary goal in this work is that of reducing the cold start latency, to make that first function invocation less costly. However, we also need to make sure that what we have a resource-efficient way to keep the function in memory, since the most frequently accessed ones make up the overwhelming share of invocations and cold starting them would be even more costly. Thus we also investigate the resource usage of WebAssembly modules in memory.
+
+\section{WebAssembly}
+
+WebAssembly (Wasm) is a ...
