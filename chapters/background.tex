@@ -20,4 +20,19 @@ Because of that, the primary goal in this work is that of reducing the cold star
 
 \section{WebAssembly}
 
-WebAssembly (Wasm) is a ...
+% - origins (asm.js)
+% - first implemnted in browsers, targeted at web
+% - but standalone runtimes exist, similar to V8 which was the node.js runtime for Chrome and later became node.js
+% - now also used at cloud service providers for serverless functions (fastly, cloudflare) and as the VM for smart contracts implementation, for instance in IOTA. In all three of these cases security is quite important, as untrusted code is executed.
+% - security properties of Wasm
+% - Finally, speed is also important (whole reason why asm.js was made in the first place)
+% - to use outside of the browser, need a interface to the OS, the task that is done by the browser on the web platform
+
+For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform, more and more programming languages could be used to write web apps. Necessarily, these languages had to use JavaScript as a target format like Java Bytecode or machine-level assembly. JavaScript of course wasn't designed for this, so performance was lacking.
+
+In 2013 a solution to this problem was introduced by engineers at Mozilla, aptly named \inl{asm.js}. It restricts itself to the parts of JavaScript that can be optimized ahead-of-time \cite{Herman2014}. Thus it might be used to compile a C/C++ program to the \inl{asm.js} target format to execute it faster with a JavaScript runtime than the equivalent JavaScript program would be. Benchmarks even showed it to run no more than 1.5x slower than native code \cite{Zakai2013}.
+
+Finally, WebAssembly (Wasm) was born out of \inl{asm.js} in 2015, with more layers of optimization. Compared to \inl{asm.js}, the Wasm binary format is smaller in size (10-20\%) and faster to parse (by an order of magnitude).
+Since it is a bytecode format independent from JavaScript, it requires a separate runtime and sandboxing mechanism.
+
+In summary, Wasm is a portable and universal binary instruction format for memory-safe, sandboxed execution in a virtual machine \cite{W3C2020}.
