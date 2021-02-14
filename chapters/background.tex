@@ -28,11 +28,35 @@ Because of that, the primary goal in this work is that of reducing the cold star
 % - Finally, speed is also important (whole reason why asm.js was made in the first place)
 % - to use outside of the browser, need a interface to the OS, the task that is done by the browser on the web platform
 
-For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform, more and more programming languages could be used to write web apps. Necessarily, these languages had to use JavaScript as a target format like Java Bytecode or machine-level assembly. JavaScript of course wasn't designed for this, so performance was lacking.
+For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform, more and more programming languages could be used to write web apps. Necessarily, these languages had to use JavaScript as a target format, like Java Bytecode or machine-level assembly in order to run on the web. Of course, JavaScript wasn't designed for this and so performance was lacking.
 
 In 2013 a solution to this problem was introduced by engineers at Mozilla, aptly named \inl{asm.js}. It restricts itself to the parts of JavaScript that can be optimized ahead-of-time \cite{Herman2014}. Thus it might be used to compile a C/C++ program to the \inl{asm.js} target format to execute it faster with a JavaScript runtime than the equivalent JavaScript program would be. Benchmarks even showed it to run no more than 1.5x slower than native code \cite{Zakai2013}.
 
-Finally, WebAssembly (Wasm) was born out of \inl{asm.js} in 2015, with more layers of optimization. Compared to \inl{asm.js}, the Wasm binary format is smaller in size (10-20\%) and faster to parse (by an order of magnitude).
-Since it is a bytecode format independent from JavaScript, it requires a separate runtime and sandboxing mechanism.
+Finally, WebAssembly (Wasm) was born out of \inl{asm.js} in 2015, with more layers of optimization. It is a portable and universal binary instruction format for memory-safe, sandboxed execution in a virtual machine.
+It is possible to write programs in a variety of languages like C, C++, Rust, AssemblyScript, C#, Go, Swift and many more, and compile them to Wasm, which finally relieves JavaScript of its role as the universal target format of the web \cite{W3C2020}.
 
-In summary, Wasm is a portable and universal binary instruction format for memory-safe, sandboxed execution in a virtual machine \cite{W3C2020}.
+% Since it is a bytecode format independent from JavaScript, it requires a separate runtime and sandboxing mechanism.
+
+\subsection{Performance}
+
+Compared to \inl{asm.js}, the Wasm binary format is smaller in size (10-20\%) and faster to parse (by an order of magnitude).
+
+
+
+
+\subsection{Security}
+
+% sandbox, memory-safety, linear memory, ...
+
+With both performance and security under its belt as well as being a portable and universal target format, Wasm turns out to be useful not just in the browser, but also outside of it.
+
+\subsection{System Interface}
+
+Wasm targets an abstract machine, so it needs an interface to the system. In the browser that works by calling into the browser through JavaScript glue code. Outside of it, a new solution was needed: The WebAssembly System Interface (Wasi). This interface was designed with Wasm's goals -- portability and security -- in mind.
+Wasi needs to be binary-compatible, so that Wasm binaries are portable between different concrete systems like Linux and Windows. This means that the Wasm runtimes need to implement that interface and translate it to the underlying concrete system.
+Wasi also innovates in security, over the classic coarse-grained access control. It specifies a fine-grained capability-based security model.
+First, the Wasm module cannot directly call an OS system call due to sandboxing, but has to go through the WebAssembly system interface instead. To that end, the module imports the functions from the runtime. For instance, to open a file, Wasi defines the \inl{path_open} function and the Wasm runtime can pass that as an import to the module. Thus it is up to the runtime to decide which functions the module has access to.
+
+This model goes even further with capability-based security...
+
+\cite{Clark2019}
