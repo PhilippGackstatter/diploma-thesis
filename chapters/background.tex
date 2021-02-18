@@ -21,19 +21,19 @@ Because of that, the primary goal in this work is that of reducing the cold star
 \section{WebAssembly}
 
 % - origins (asm.js)
-% - first implemnted in browsers, targeted at web
+% - first implemented in browsers, targeted at web
 % - but standalone runtimes exist, similar to V8 which was the node.js runtime for Chrome and later became node.js
 % - now also used at cloud service providers for serverless functions (fastly, cloudflare) and as the VM for smart contracts implementation, for instance in IOTA. In all three of these cases security is quite important, as untrusted code is executed.
 % - security properties of Wasm
 % - Finally, speed is also important (whole reason why asm.js was made in the first place)
 % - to use outside of the browser, need a interface to the OS, the task that is done by the browser on the web platform
 
-For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform and its growing number of APIs, more and more complex web apps were written. Sometimes in other programming languages. Necessarily, these languages had to use JavaScript as a target format, like Java Bytecode or machine-level assembly in order to run on the web. Of course, JavaScript wasn't designed for this and so performance was lacking.
+For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform and its growing number of APIs, more and more complex web apps were written. Sometimes in other programming languages. Necessarily, these languages had to use JavaScript as a target format, like Java bytecode or machine-level assembly in order to run on the web. Of course, JavaScript wasn't designed for this and so performance was lacking.
 
 In 2013 a solution to this problem was introduced by engineers at Mozilla, aptly named \inl{asm.js}. It restricts itself to the parts of JavaScript that can be optimized ahead-of-time \cite{Herman2014}. Thus it might be used to compile a C/C++ program to the \inl{asm.js} target format to execute it faster with a JavaScript runtime than the equivalent JavaScript program would be. Benchmarks even showed it to run no more than 1.5x slower than native code \cite{Zakai2013}.
 
 Finally, WebAssembly (Wasm) was born out of \inl{asm.js} in 2015, with more layers of optimization. It is a portable and universal binary instruction format for memory-safe, sandboxed execution in a virtual machine.
-It is possible to write programs in a variety of languages like C, C++, Rust, AssemblyScript, C#, Go, Swift and many more, and compile them to Wasm, which finally relieves JavaScript of its role as the universal target format of the web \cite{W3C2020}.
+It is possible to write programs in a variety of languages like C, C++, Rust, AssemblyScript, C\#, Go, Swift and many more, and compile them to Wasm, which finally relieves JavaScript of its role as the universal target format of the web \cite{W3C2020}.
 
 % Since it is a bytecode format independent from JavaScript, it requires a separate runtime and sandboxing mechanism.
 
@@ -45,6 +45,8 @@ Compared to \inl{asm.js}, the Wasm binary format is smaller in size (10-20\%) an
 % Not representative, if we precompile to native code, but may be relevant if we choose to also evaluate the Wasm runtimes JIT modes
 Wasm modules tend to be smaller than native x86-64 binaries. On average, Wasm modules have 85\% of the size.
 \cite{Haas2017}.
+
+% How relevant is native speed actually for the serverless context -- examine in later chapter?
 
 % The binary format is designed to allow streaming the contents, so that parts of it can be compiled even before the entire module has been transmitted. (but this is actually irrelevant for our OW implementation, since we have the init call first, in which the module is stored in a hashmap, and later the run call, where it is directly read from memory)
 
@@ -59,26 +61,26 @@ Wasm defines two important goals for security.
     \quot{1) protect users from buggy or malicious modules, and (2) provide developers with useful primitives and mitigations for developing safe applications, within the constraints of (1) \cite{W3C2020}.}
 \end{quote}
 
-To that end, Wasm uses fault isolation techniques to sandbox the executing module. Interaction with the host environment is only possible through imported functions \cite{W3C2020}.
+To that end, Wasm uses fault isolation techniques to sandbox the executing module. Interaction with the host environment is only possible through imported functions \cite{W3C2020}. This mechanism represents a "safe foreign function interface" as it can communicate with the outside environment, but not escape the sandbox \cite{Haas2017}.
 
-Wasm calls its heap linear memory. This memory is separate from the code space, which prevents programs from overwriting instructions. Programs can only operate in their own execution environment, but cannot escape. This means Wasm runtimes can safely execute multiple untrusted modules with their own linear memories in the same process memory space and without requiring additional isolation \cite{Haas2017}.
+In Wasm, heap allocations allocate in its linear memory. This memory is separate from the code space, which prevents programs from overwriting instructions. Programs can only operate in their own execution environment, but cannot escape. This means Wasm runtimes can safely execute multiple untrusted modules, with their own linear memories, in the same process memory space and without requiring additional isolation \cite{Haas2017}. This is a key aspect that enables Wasm as a lightweight container technology. Only a single instance of a runtime is needed to execute many (serverless) functions.
 
-Wasm also features control-flow integrity because it enforces structured control flow. By design it is impossible to jump to arbitrary locations and the jump targets as well as other properties can be validated in a single-pass. This validation must happen before a module is executed by a runtime. The import mechanism represents a safe foreign function interface through which modules can call host functions.
-
-% That makes Wasm very suitable for serverless execution as only a single instance of a runtime is necessary to execute potentially many serverless functions.
-
-
-
+Wasm also features control-flow integrity because it enforces structured control flow. Jump targets and other properties are validated in a single-pass before a module is instantiated. In particular, validation prevents jumps from targeting arbitrary locations. This validation must happen before a module is executed by a runtime \cite{Haas2017}.
 
 With both performance and security under its belt as well as being a portable and universal target format, Wasm turns out to be useful not just in the browser, but also outside of it.
 
 \subsection{System Interface}
 
 Wasm targets an abstract machine, so it needs an interface to the system. In the browser that works by calling into the browser through JavaScript glue code. Outside of it, a new solution was needed: The WebAssembly System Interface (Wasi). This interface was designed with Wasm's goals -- portability and security -- in mind.
-Wasi needs to be binary-compatible, so that Wasm binaries are portable between different concrete systems like Linux and Windows. This means that the Wasm runtimes need to implement that interface and translate it to the underlying concrete system.
-Wasi also innovates in security, over the classic coarse-grained access control. It specifies a fine-grained capability-based security model.
-First, the Wasm module cannot directly call an OS system call due to sandboxing, but has to go through the WebAssembly system interface instead. To that end, the module imports the functions from the runtime. For instance, to open a file, Wasi defines the \inl{path_open} function and the Wasm runtime can pass that as an import to the module. Thus it is up to the runtime to decide which functions the module has access to.
+Wasi is binary-compatible, so that Wasm binaries are portable between different concrete systems like Linux and Windows, but also browsers. The Wasm runtimes effectively implement that interface and translate it to the underlying concrete system.
+Wasi also innovates in security, over the classic coarse-grained access control. It specifies a fine-grained capability-based security model, that consists of two parts. First, Wasi makes use of the aforementioned import mechanism of Wasm, to adhere to its security model. The Wasm module cannot directly call an OS system call due to sandboxing, but imports Wasi functions \cite{Clark2019}. For instance, a module that wants to open a file needs import statements like these:
 
-This model goes even further with capability-based security...
+% Change to `wat` after this PR has landed: https://github.com/pygments/pygments/pull/1564
+\begin{minted}{python}
+(import "wasi_snapshot_preview1" "fd_read" (func (;5;) (type 8)))
+(import "wasi_snapshot_preview1" "path_open" (func (;7;) (type 22)))
+\end{minted}
 
-\cite{Clark2019}
+The runtime needs to supply those imports somehow, or the module cannot run. In effect, the runtime and module need to be in consensus about which functions can be accessed. In a serverless context for example, the cloud provider could grant or refuse access to certain functions, enabling security policies on a per-function basis. However, even that is not fine-grained enough. The cloud provider might only want to allow serverless functions to cache some data temporarily in the \inl{/tmp/} directory, but not allow opening \inl{~/.ssh/id_rsa}. This is where Wasi takes ideas from capability-based security.
+
+In order to open a file, the module needs to call functions accessing the file, like \inl{fd_read}, with a preopened file descriptor \cite{Clark2019}. The Wasm module then has the \emph{capability} to access \emph{that} file, but not others. The file can be opened by the runtime itself, or the program that embeds the runtime. They store that file descriptor in a special Wasi module which the runtime -- similar to a dynamic linker -- links to the Wasm module from where it imports the functions. Again, this gives the embedder (i.e. a cloud provider) the chance to customize the exact capabilities on a fine-grained level.
