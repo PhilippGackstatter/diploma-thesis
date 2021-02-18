@@ -1,1 +1,12 @@
 \chapter{Related Work}
+
+In this chapter we will look at other approaches for reducing cold-starts.
+
+\section{Cloudflare Workers}
+
+Cloudflare is a cloud service provider, whose \emph{Workers} offering enables end-users to run code on its Edge Network. The Workers use Google's V8 JavaScript engine to execute that code.
+Instead of running each serverless function in a separate docker container or even \inl{node.js} instance, the Workers use V8 isolates to lightweight sandboxing. Isolates start within the already running V8 engine, so the start is almost instantaneous, alleviating cold-starts down to 0 ms.
+Workers allow execution of JavaScript directly in an isolate as well as Rust, C and other languages via Wasm support \cite{Cloudflare2021}.
+Similar to our approach, a lighter-weight sandboxing is introduced to cut down on the cold-start latency. This execution model eliminates the costly startup of a \inl{node.js} process, but it would still need to parse and compile the JavaScript or WebAssembly, before execution can begin.
+
+% Expand with Wasm in our OW and precompiled Wasm in our OW.
