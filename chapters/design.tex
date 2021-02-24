@@ -24,10 +24,35 @@ Our focus is on the Invoker. It is the part of OpenWhisk responsible for \emph{i
     \item Finally, it injects the action's code into the container, invokes it with the given parameters and returns the result \cite{OpenWhiskSystemDesign}.
 \end{enumerate}
 
-Because OpenWhisk supports many runtimes and even the mentioned black-box image, it needs a common protocol to communicate with all of them. The just-described step 3 is the gist of that protocol. Each runtime needs to implement a \inl{/init} endpoint, where it receives the code and takes whatever steps necessary to make it ready for execution. Thus, over a containers life cycle, this endpoint is called exactly once. Afterwards, the \inl{/run} endpoint can be called multiple times to execute the action \cite{OpenWhiskSystemDesign}.
+Because OpenWhisk supports many runtimes and even the mentioned black-box image, it needs a common protocol to communicate with all of them. The just-described step 3 is the gist of that protocol. Each runtime needs to implement an \inl{/init} endpoint, where it receives the code and takes whatever steps necessary to make it ready for execution. Thus, over a containers life cycle, this endpoint is called exactly once. Afterwards, the \inl{/run} endpoint can be called multiple times to execute the action \cite{OpenWhiskSystemDesign}.
 
 That implies that the container isn't destroyed immediately after it has been invoked once. Indeed, OpenWhisk uses various optimizations of the described flow, in order to improve the system's performance. Among those are pre-warming containers or keeping the container running for some time after it has been invoked, before it is removed.
 We will explore those optimizations in more depth later, to compare them to the optimizations in our Wasm runtime to better see where they coincide and differ \cite{OpenWhiskSystemDesign}.
 
+% Describe deployment -- which of the components in the figure are packed as one in the deployment, i.e. in the kubernetes deployment with docker, the invoker and the containers are in the same pod
 
+\subsection{OpenWhisk Modifications}
 
+% Figure Planned modifications which is directly comparable to aboves figure
+
+\begin{figure}
+    \includegraphics{figures/WasmOpenWhiskActionInvocationFlow.pdf}
+    \caption{Invocation flow of a Wasm action in our modified Apache OpenWhisk.}
+    \label{fig:wasm-openwhisk-action-invocation-flow}
+\end{figure}
+
+In this described invocation flow, we need to hook into OpenWhisk's invoker to enable its communication with the Wasm runtime we will implement, instead of the Docker daemon. Fortunately, the Invoker is already well-separated from the concrete containerization technology through a Service Provider Interface (SPI). OpenWhisk already supports Docker, but also Kubernetes as the container management system, such that the SPI was a logical addition. We implement a \inl{WasmContainer} that extends OpenWhisk's \inl{Container} abstraction, which already handles container communication, such as calling the \inl{/init} and \inl{/run} endpoints.
+
+% Figure that shows a zoomed-in version of the invoker and its SPIs (as well as the Wasm runtime?) - Help better understand OW's design and what we added
+
+In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the \inl{WasmRuntime}. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server; increasing both the module's size and its runtime overhead. That presupposes, that the \inl{WasmRuntime} needs to be able to handle a potentially high amount of requests.
+
+The runtime also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. A general requirement for a useful Wasm runtime would also be its ability to run on different instruction set architectures.
+
+In summary, the requirements for our runtime are
+
+\begin{enumerate}
+    \item It needs to be fast to alleviate the cold-start problem.
+    \item It needs to run on devices with potentially different instruction set architectures.
+    \item It needs to be able to efficiently handle a large amount of I/O concurrently, due to all requests being proxied through
+\end{enumerate}
