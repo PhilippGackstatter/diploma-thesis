@@ -77,12 +77,32 @@ The runtime consists of a web server that can take requests from the invoker asy
 
 The entry point into our runtime will be through HTTP endpoints. In order for our runtime to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library.
 Rust's async model works with \inl{Futures} -- also known as Promises in JavaScript -- which represent values that have not yet been computed. Contrary to \inl{Promises} however, Rust's \inl{Futures} are lazy: They do nothing unless actively polled. This task falls to \inl{async} runtimes, of which \inl{async-std} provides one. In \inl{async-std} the unit of execution is a \inl{Task}, which is similar to a \inl{Thread}, except it is driven to completion by the user space runtime instead of the OS. Many of those tasks are executed on the same thread, and by default, a \inl{Thread} per logical CPU core is spawned. Thus we have $M \cdot N$ tasks in total, where $M$ is the number of tasks per thread and $N$ the number of logical CPU cores.
-From that, a second distinction is implied. A \inl{Task} should not do a blocking or long-running operation, like reading from a file via the standard library's \inl{std::fs::read_to_string}. Instead, it should use the \inl{async} version of that method, from \inl{async-std}, which does not block the thread. Otherwise, all other $M - 1$ tasks that are executed on the same thread will also be blocked, even though they may be able to progress. Note that, we could still process $N$ requests concurrently, even if tasks block, but that doesn't scale well enough. This is why async functions are also called cooperative routines (coroutines). When they need to wait for the OS to finish a task, they \emph{yield} to another routine, which can then continue actual work.
+From that, a second distinction is implied. A \inl{Task} should not do a blocking or long-running operation, like reading from a file via the standard library's \inl{std::fs::read_to_string}. Instead, it should use the \inl{async} version of that method, from \inl{async-std}, which does not block the thread. Otherwise, all other $M - 1$ tasks, which are executed on the same thread, will also be blocked, even though they may be able to make progress. Note that, we could still process $N$ requests concurrently, even if tasks block, but that doesn't scale well enough. This is why async functions are also called cooperative routines (coroutines). When they need to wait for the OS to finish a task, they \emph{yield} to another routine, which can then continue actual work.
 
-Next to blocking operations, particularly long-running computations aren't a good fit for this execution model either. While one coroutine is computing, the others are -- once again -- waiting, similar to the blocking example. Executing a WebAssembly module is a long-running computation. Various data structures need to be created and the actual execution of the module is computationally intensive, since we embed the entire runtime.
-To let the other coroutines make progress while we execute the module, we push the entire execution onto a thread pool. The coroutine then has the simple job of asynchronously waiting for that execution to finish and collecting the result. That allows the other coroutines to process more requests.
+That becomes relevant for us, when we execute WebAssembly modules. Taking the module, setting up the Wasm runtime and executing it, is a long-running computation -- and one that could block as well. This would in turn block the thread we are currently running on, which means, only $N$ Wasm modules can be executed concurrently. This is not an issue for computationally-intensive workloads, where no more work can be done concurrently, than the CPU has logical cores. However, for I/O-bound workloads, such as requests over the network, this can quickly become a bottleneck. Since one of the appealing offerings of serverless frameworks is their elasticity, we clearly need a way to handle many more requests, even if they block.
+To let other coroutines on the same thread make progress, while one executes the module, we can push the entire execution onto a thread pool. The coroutine then has the simple job to asynchronously wait for that execution to finish and collect the result. That allows the other coroutines to process more requests in the meantime.
 
-% Code-snippet task::spawn_blocking or similar
+To test the theory, whether the thread pool model is able to handle more requests, we run two short experiments.
+
+\begin{enumerate}
+    \item Compute-bound: Calculating a large prime number.
+    % \item Filesystem-I/O-bound: Reading a 30 MB file from disk.
+    \item Network-I/O-bound: Making a long-running (1 second) HTTP request.
+\end{enumerate}
+
+Our test machine has 8 logical CPU cores, resulting in 8 threads being started for the async-std runtime. We thus send 16 concurrent requests to be able to see the potential blocking in the result. The first experiment showed no difference in the total execution time between the default and thread pool model. As we would expect, in the default model the compute-bound task finishes the first 8 requests, before starting the second set. The execution in a thread pool executes all 16 requests concurrently, but each took roughly twice as long, resulting in no significant difference between the total execution time. The default model operates more along the first-come, first-serve principle, where an early request will also get a response more quickly. In this simplified example, where all workloads are compute-bound, this may be preferable.
+
+\begin{figure}
+    \begin{center}
+        \input{figures/async_std_default_thread_vs_thread_pool.pgf}
+    \end{center}
+    \caption{Executing blocking Wasm workloads under the \inl{async-std} default model with 8 threads, compared with running each in a thread from a pool.}
+    \label{fig:blocking-net-wasmtime}
+\end{figure}
+
+The result of the second experiment is shown in figure \ref{fig:blocking-net-wasmtime}. In the default model, the first 8 requests block the other 8, while they wait for the HTTP request to finish, resulting in roughly 2 seconds of total execution time. Unsurprisingly, the thread pool model finishes in half the total execution time, since it can handle all 16 requests simultaneously, due to using a new thread from the pool for each blocking operation.
+
+Both models seem to have a workload better suited to them. However, in a real-world, mixed-workload scenario, a long-running, compute-bound function may prevent another I/O-bound one from initializing its computationally cheap request. A mixed scenario may therefore also be better served by the thread pool model.
 
 
 \subsection{Optimizations}
