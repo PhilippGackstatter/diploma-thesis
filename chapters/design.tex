@@ -97,13 +97,24 @@ Our test machine has 8 logical CPU cores, resulting in 8 threads being started f
         \input{figures/async_std_default_thread_vs_thread_pool.pgf}
     \end{center}
     \caption{Executing blocking Wasm workloads under the \inl{async-std} default model with 8 threads, compared with running each in a thread from a pool.}
-    \label{fig:blocking-net-wasmtime}
+    \label{fig:default_vs_thread_pool}
 \end{figure}
 
-The result of the second experiment is shown in figure \ref{fig:blocking-net-wasmtime}. In the default model, the first 8 requests block the other 8, while they wait for the HTTP request to finish, resulting in roughly 2 seconds of total execution time. Unsurprisingly, the thread pool model finishes in half the total execution time, since it can handle all 16 requests simultaneously, due to using a new thread from the pool for each blocking operation.
+The result of the second experiment is shown in figure \ref{fig:default_vs_thread_pool}. In the default model, the first 8 requests block the other 8, while they wait for the HTTP request to finish, resulting in roughly 2 seconds of total execution time. Unsurprisingly, the thread pool model finishes in half the total execution time, since it can handle all 16 requests simultaneously, due to using a new thread from the pool for each blocking operation.
 
 Both models seem to have a workload better suited to them. However, in a real-world, mixed-workload scenario, a long-running, compute-bound function may prevent another I/O-bound one from initializing its computationally cheap request. A mixed scenario may therefore also be better served by the thread pool model.
 
+\begin{figure}
+    \begin{center}
+        \input{figures/async_std_default_thread_vs_thread_pool_mixed.pgf}
+    \end{center}
+    \caption{The average request duration and the average amount of requests finished per second under the default and thread pool execution model, sampled over 50 runs.}
+    \label{fig:default_vs_thread_pool_mixed}
+\end{figure}
+
+In figure \ref{fig:default_vs_thread_pool_mixed} a mixed scenario is run, where 16 compute-bound and 16 I/O-bound requests are executed simultaneously. In the default model, the compute-bound requests finish in about one third of the time they take under the thread pool model. This is again due to more requests being processed concurrently in the latter model. This is also why the standard deviation is slightly higher in that model. For I/O-bound workloads, there is a slight advantage for the default model. However, in the context of the plot on the right side, the thread pool model is able to handle more requests per second in general, but specifically excels at the I/O-bound ones. There is an inherent trade-off between serving a request as soon as possible, and the time it takes to finish serving it. It depends on the expected workload, which model should be used.
+
+% TODO: Find out whether typical serverless workload is compute-bound or I/O-bound
 
 \subsection{Optimizations}
 
