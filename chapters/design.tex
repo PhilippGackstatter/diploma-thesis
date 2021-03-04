@@ -29,7 +29,26 @@ Because OpenWhisk supports many runtimes and even the mentioned black-box image,
 That implies that the container isn't destroyed immediately after it has been invoked once. Indeed, OpenWhisk uses various optimizations of the described flow, in order to improve the system's performance. Among those are pre-warming containers or keeping the container running for some time after it has been invoked, before it is removed.
 We will explore those optimizations in more depth later, to compare them to the optimizations in our Wasm runtime to better see where they coincide and differ \cite{OpenWhiskSystemDesign}.
 
-% Describe deployment -- which of the components in the figure are packed as one in the deployment, i.e. in the kubernetes deployment with docker, the invoker and the containers are in the same pod
+\subsection{OpenWhisk on Kubernetes}
+
+OpenWhisk can be deployed on a Kubernetes cluster, a container orchestration tool for automating deployment and scaling of containers \cite{Kub2021}. OpenWhisk has a \inl{ContainerFactoryProvider} service provider interface (SPI), which represents the underlying container management platform. It provides two implementations of that SPI \cite{OWKub2020}.
+
+\begin{enumerate}
+    \item The \inl{DockerContainerFactory} implements the architecture shown above, except that most components of OpenWhisk run in separate Kubernetes pods. In non-Kubernetes deployments, they usually run in separate Docker containers. The crucial part of this deployment is, that the Invoker runs in a single pod (potentially on multiple worker nodes), and also spawns all of the actions in docker containers inside that pod. Thus container management latency is rather small, but does not take advantage of Kubernetes' scaling mechanisms.
+    \item The \inl{KubernetesContainerFactory} interfaces with the Kubernetes API to create and schedule actions in containers -- in turn contained in pods -- to run on different Kubernetes worker nodes. This trades higher container management latency for access to Kubernetes' scaling mechanisms.
+\end{enumerate}
+
+\subsection{Executing WebAssembly with OpenWhisk}
+
+To execute Wasm modules in OpenWhisk, we have two similar options with similar trade-offs.
+
+\begin{enumerate}
+    \item Using one of a number of WebAssembly runtimes that are currently being developed and are in various stages of maturity. We would need to embed one of these runtimes in a program of our own that provides a similar interface as Docker. This WebAssembly container runtime would then be able to replace the Docker daemon in the architecture presented above, and run Wasm modules instead of Docker images. Since this program would sit in-between OpenWhisk and the Wasm runtime, we would have precise control over the management of the modules, i.e. whether the Wasm module is just-in-time compiled, interpreted or compiled to native code ahead-of-time; the caching layer that keeps initialized modules ready for fast execution; or the configuration of the system interface with which Wasm modules can interact with the underlying operating system.
+    \item The second option is to use Kubernetes as the management system for our Wasm modules. Kubernetes is generic over the underlying container runtimes, and as such it runs on \inl{containerd}, \inl{CRI-O} and Docker \cite{Kub2021}. However, it is also possible to let Kubernetes pods run on other runtimes by implementing the \inl{kubelet} API. The \inl{krustlet} project provides a \inl{kubelet} implementation that can execute Wasm workloads \cite{Krustlet2021}. With that, we can now instruct Kubernetes to run Wasm modules for us, instead of the typical Docker container.
+\end{enumerate}
+
+We will explore those two options in more detail and discuss which may be a better fit for our requirements.
+
 
 \subsection{OpenWhisk Modifications}
 
