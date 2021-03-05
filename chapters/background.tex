@@ -5,11 +5,23 @@ In this chapter we establish a common background for serverless computing and We
 
 \section{Serverless computing}
 
+We've already given a technical definition of serverless computing in chapter \ref{chapter:introduction}. Serverless is also interesting as a concept of architecting applications. \citeauthor{McGrath2017} describe serverless as the manifestation of the idea, that applications are defined by events and the actions they trigger \cite{McGrath2017}. Events can be a user pressing a button on a frontend, a file being uploaded to a storage system or an edge device measuring sensor data and posting it. Serverless is ideal, because as long as no event happens, there is no cost -- the system is scaled down to zero.
+
+% Definition already given in Intro
+% Where is serverless used, use-cases, patterns, architectures
+% edge computing, serverless ON edge devices
+
+\subsection{Cold Start}
+
+In the context of serverless computing, a cold start refers to the invocation of a function, when all of the necessary resources for its execution must be provisioned from scratch. A cold start thus delays the execution of the function itself, by the amount of time it takes for the resources to become ready. This is what we call the cold start latency or cold start time.
+
+\citeauthor{Wang2018} have measured the cold start latency at major cloud providers such as Amazon Web Services (AWS) and Google Cloud Platform. The median cold start latency for AWS was between 250 ms (1536 MB) and 265 ms (128 MB) and between 110 ms (2048 MB) and 493 ms (128 MB) for Google, both depending on the amount of memory assigned to the instance \cite{Wang2018}.
+
 \section{Serverless workload}
 
 \citeauthor{Shahrad2020} have characterized the serverless workload at a large cloud-provider, Microsoft Azure. Because of their large number of users, this study can be considered very representative of the average workload.
 They find that on average 81\% of the functions are invoked less than once per minute. However, those accessed more frequently make up 99.6\% of all invocations \cite{Shahrad2020}.
-Those frequently accessed functions should thus be kept in memory, to avoid the cold start entirely. The less frequently accessed functions should not be kept in memory, but created, executed and destroyed immediately, in order to save resources. For this to be viable, the cold-start needs to be a cheap operation. In general, the cheaper the cold start, the smaller the amount of time that functions need to be kept in memory.
+Those frequently accessed functions should thus be kept in memory, to avoid the cold start entirely. The less frequently accessed functions should not be kept in memory, but created, executed and destroyed immediately, in order to save resources. For this to be viable, the cold-start needs to be a cheap operation. In general, the cheaper the cold start, the smaller the amount of time that functions need to be kept in memory. This is great for the operators of a serverless platform, since customers are only billed the execution time of the function, but keeping functions in memory -- or resources warm, more generally -- has costs for the operator. Thus, shorter cold starts reduces costs.
 
 \citeauthor{Shahrad2020} also find that on average, 50\% of functions execute for less than one second.
 
@@ -17,7 +29,8 @@ Those frequently accessed functions should thus be kept in memory, to avoid the 
     \quot{The main implication is that the function execution times are at the same order of magnitude as the cold start times reported for major providers. \emph{This makes avoiding and/or optimizing cold starts extremely important for the overall performance of a FaaS offering} \cite{Shahrad2020}.}
 \end{quote}
 
-Because of that, the primary goal in this work is that of reducing the cold start latency, to make that first function invocation less costly. However, we also need to make sure that what we have a resource-efficient way to keep the function in memory, since the most frequently accessed ones make up the overwhelming share of invocations and cold starting them would be even more costly. Thus we also investigate the resource usage of WebAssembly modules in memory.
+This is corroborated by the findings of \citeauthor{Wang2018} above.
+Because of these findings, the primary goal in this work is that of reducing the cold start latency, to make that first function invocation less costly. However, we also need to make sure that what we have a resource-efficient way to keep the function in memory, since the most frequently accessed ones make up the overwhelming share of invocations and cold starting them would be even more costly. Thus we also investigate the resource usage of WebAssembly modules in memory.
 
 \section{WebAssembly}
 
@@ -59,7 +72,7 @@ Wasm modules tend to be smaller than native x86-64 binaries. On average, Wasm mo
 Wasm defines two important goals for security.
 
 \begin{quote}
-    \quot{1) protect users from buggy or malicious modules, and (2) provide developers with useful primitives and mitigations for developing safe applications, within the constraints of (1) \cite{W3C2020}.}
+    \quot{(1) protect users from buggy or malicious modules, and (2) provide developers with useful primitives and mitigations for developing safe applications, within the constraints of (1) \cite{W3C2020}.}
 \end{quote}
 
 To that end, Wasm uses fault isolation techniques to sandbox the executing module. Interaction with the host environment is only possible through imported functions \cite{W3C2020}. This mechanism represents a "safe foreign function interface" as it can communicate with the outside environment, but not escape the sandbox \cite{Haas2017}.
@@ -69,6 +82,11 @@ In Wasm, heap allocations allocate in its linear memory. This memory is separate
 Wasm also features control-flow integrity because it enforces structured control flow. Jump targets and other properties are validated in a single-pass before a module is instantiated. In particular, validation prevents jumps from targeting arbitrary locations. This validation must happen before a module is executed by a runtime \cite{Haas2017}.
 
 With both performance and security under its belt as well as being a portable and universal target format, Wasm turns out to be useful not just in the browser, but also outside of it.
+
+% http://wingolog.org/archives/2020/10/15/on-binary-security-of-webassembly
+Some of the criticism of Wasm security by "everything old is new again" is due to the fact, that C and C++ are simply not memory-safe. Shipping them as x86\_64 binaries compiled with a modern compiler, will add mitigations for these unsafeties. Wasm does not have those, so the vulnerabilities are once again exploitable. However, whether this is Wasm's fault is debatable. Wasm aims to be a universal target format. It does aim to enable C or C++ to run on the Web, similar to asm.js. However it is not the only language that was designed for.
+
+Rust has the concept of zero-cost abstractions. The concept can be boiled down to, if you don't use it, you don't pay for it (cite stroustroup or so). Early version's of the Rust language had green threads built-in, which was removed precisely for that reason. Similarly, Wasm should not introduce mitigations that every language would pay for, even if they are already memory-safe by design, like Rust or even Java. In this sense, it is not Wasm's responsibilty to fix the insecurities of C or C++.
 
 \subsection{System Interface}
 
@@ -85,6 +103,9 @@ Wasi also innovates in security, over the classic coarse-grained access control.
 The runtime needs to supply those imports somehow, or the module cannot run. In effect, the runtime and module need to be in consensus about which functions can be accessed. In a serverless context for example, the cloud provider could grant or refuse access to certain functions, enabling security policies on a per-function basis. However, even that is not fine-grained enough. The cloud provider might only want to allow serverless functions to cache some data temporarily in the \inl{/tmp/} directory, but not allow opening \inl{~/.ssh/id_rsa}. This is where Wasi takes ideas from capability-based security.
 
 In order to open a file, the module needs to call functions accessing the file, like \inl{fd_read}, with a preopened file descriptor \cite{Clark2019}. The Wasm module then has the \emph{capability} to access \emph{that} file, but not others. The file can be opened by the runtime itself, or the program that embeds the runtime. They store that file descriptor in a special Wasi module which the runtime -- similar to a dynamic linker -- links to the Wasm module from where it imports the functions. Again, this gives the embedder (i.e. a cloud provider) the chance to customize the exact capabilities on a fine-grained level.
+
+% Compare with docker in terms of sandboxing, security, system interface, performance, resource cost
+% we can control access to resources as well -- at least memory (more research)
 
 \subsection{Execution}
 
