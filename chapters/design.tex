@@ -61,9 +61,9 @@ As a \inl{kubelet}, \inl{krustlet} runs on Kubernetes worker nodes and accepts w
 
 While this approach has its merits, we believe that there would be higher friction for implementing it in OpenWhisk, than writing our own layer to Wasm runtimes. It provides more control over optimizing the cold-start latency as well as the execution performance, which are our main priorities.
 
-\subsection{OpenWhisk Modifications}
+\subsection{An OpenWhisk-WebAssembly Layer}
 
-% Figure Planned modifications which is directly comparable to aboves figure
+We will implement a layer between OpenWhisk and different WebAssembly runtimes, in order to enable the execution of Wasm modules in OpenWhisk. The layer will be generic over the underlying WebAssembly runtime, such that we can use different ones and compare them. We aim to replace the Docker daemon in the architecture shown above, leveraging the existing OpenWhisk interface for container management.
 
 \begin{figure}
     \includegraphics{figures/WasmOpenWhiskActionInvocationFlow.pdf}
@@ -71,7 +71,7 @@ While this approach has its merits, we believe that there would be higher fricti
     \label{fig:wasm-openwhisk-action-invocation-flow}
 \end{figure}
 
-In this described invocation flow, we need to hook into OpenWhisk's invoker to enable its communication with the Wasm runtime we will implement, instead of the Docker daemon. Fortunately, the Invoker is already well-separated from the concrete containerization technology through a Service Provider Interface (SPI). OpenWhisk already supports Docker, but also Kubernetes as the container management system, such that the SPI was a logical addition. We implement a \inl{WasmContainer} that extends OpenWhisk's \inl{Container} abstraction, which already handles container communication, such as calling the \inl{/init} and \inl{/run} endpoints.
+In figure \ref{fig:wasm-openwhisk-action-invocation-flow} we have sketched the high-level modifications that we need to make to OpenWhisk. In this invocation flow, we need to hook into OpenWhisk's invoker to enable its communication with the Wasm runtime we will implement, instead of the Docker daemon. Fortunately, the Invoker is already well-separated from the concrete containerization technology through a Service Provider Interface (SPI). OpenWhisk already supports Docker, but also Kubernetes as the container management system, such that the SPI was a logical addition. We implement a \inl{WasmContainer} that extends OpenWhisk's \inl{Container} abstraction, which already handles container communication, such as calling the \inl{/init} and \inl{/run} endpoints.
 
 % Figure that shows a zoomed-in version of the invoker and its SPIs (as well as the Wasm runtime?) - Help better understand OW's design and what we added
 
