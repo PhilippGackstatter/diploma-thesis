@@ -3,6 +3,18 @@
 
 In this chapter, we lay out the requirements for our implementation of Wasm containers in Apache OpenWhisk. Then we describe and discuss our implementation and the trade-offs involved.
 
+\section{Core approach}
+
+As we've seen in the previous chapter, there are a number of issues with serverless in general, but also serverless on the edge. And they are quite similar. In this section we will describe our idea for rectifying these issues to make serverless (edge) computing more viable.
+
+A substantial cold start latency has emerged as the paramount issue of the serverless platform. It prevents serverless platforms from implementing true scale-to-zero, since functions are kept warm after invocations, wasting energy and resources. While we may not be able to get rid of the keep-alive completely, a significant reduction in cold start latency would allow a similarly large reduction in keep-alive time. Since energy and resources are even more precious on typical edge devices, this is also very important for their quality of service.
+Serverless is employed by developers for bursty, unpredictable workloads, a pattern that is also common at the edge. In this scenario we see cold starts occurring concurrently, one in which container starts slow each other down.
+Operators are forced to choose between saving cost and resources or enabling a high quality of service, in particular shorter response times. While this trade-off is inevitable to some degree, the cold start exacerbates it. If we can alleviate that latency, we have a win-win for the serverless user and the operator.
+
+Serverless enables the execution of \quot{polgylot tenant-provided code} \cite{Nastic2018}. A new runtime for serverless must keep up these principles of being programming language agnostic as well as being securely sandboxed, to allow for multi-tenancy. As described in the previous chapter, WebAssembly provides sandboxing and support for many languages, with support for more, likely to come. At the same time, it is a lighter-weight solution than virtualization with Docker containers. Thus, it seems like a good candidate to replace Docker containers in serverless platforms while alleviating the cold start latency. This is also why WebAssembly may fare better on low-power edge devices.
+
+\citeauthor{Mendki2020} compared WebAssembly and Docker container startup times, and found WebAssembly being 91\% faster than containers and used 75\% less memory \cite{Mendki2020}. \citeauthor{Hall2019} find their WebAssembly-based serverless platform fared 60\% better on average, than the Docker container solution, for their concurrent \quot{Multiple Client, Multiple Access} workload \cite{Hall2019}. These promising results are the basis for our work and validate the core idea of our approach.
+
 \section{Requirements}
 
 \subsection{Apache OpenWhisk}
