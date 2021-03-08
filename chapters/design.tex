@@ -73,27 +73,27 @@ As a \inl{kubelet}, \inl{krustlet} runs on Kubernetes worker nodes and accepts w
 
 While this approach has its merits, we believe that there would be higher friction for implementing it in OpenWhisk, than writing our own layer to Wasm runtimes. It provides more control over optimizing the cold-start latency as well as the execution performance, which are our main priorities.
 
-\subsection{An OpenWhisk-WebAssembly Layer}
+\subsection{An OpenWhisk-WebAssembly Executor}
 
-We will implement a layer between OpenWhisk and different WebAssembly runtimes, in order to enable the execution of Wasm modules in OpenWhisk. The layer will be generic over the underlying WebAssembly runtime, such that we can use different ones and compare them. We aim to replace the Docker daemon in the architecture shown above, leveraging the existing OpenWhisk interface for container management.
+Because the first-mentioned approach allows us to integrate Wasm into OpenWhisk with fewer changes to it, we choose to follow this path. We will implement a layer between OpenWhisk and different WebAssembly runtimes, in order to enable the execution of Wasm modules in OpenWhisk. We refer to this as the Wasm executor, to distinguish it from Wasm runtimes -- those responsible for the actual execution of Wasm modules. We aim to replace the Docker daemon in the architecture shown above, leveraging the existing OpenWhisk interface for container management.
 
 \begin{figure}
     \includegraphics{figures/WasmOpenWhiskActionInvocationFlow.pdf}
-    \caption{Invocation flow of a Wasm action in our modified Apache OpenWhisk.}
+    \caption{Invocation flow of a Wasm action in our modified Apache OpenWhisk. The Invoker \emph{injects} the code into the executor which \emph{creates} a Wasm Module ready for execution. It then \emph{instructs} the executor to \emph{invoke} the module with the parameters it passes. The result is passed back to the Invoker. Again, a user-definable number of one or more Invokers can exist.}
     \label{fig:wasm-openwhisk-action-invocation-flow}
 \end{figure}
 
-In figure \ref{fig:wasm-openwhisk-action-invocation-flow} we have sketched the high-level modifications that we need to make to OpenWhisk. In this invocation flow, we need to hook into OpenWhisk's invoker to enable its communication with the Wasm runtime we will implement, instead of the Docker daemon. Fortunately, the Invoker is already well-separated from the concrete containerization technology through a Service Provider Interface (SPI). OpenWhisk already supports Docker, but also Kubernetes as the container management system, such that the SPI was a logical addition. We implement a \inl{WasmContainer} that extends OpenWhisk's \inl{Container} abstraction, which already handles container communication, such as calling the \inl{/init} and \inl{/run} endpoints.
+In figure \ref{fig:wasm-openwhisk-action-invocation-flow} we have sketched the high-level modifications that we need to make to OpenWhisk. In this invocation flow, we need to hook into OpenWhisk's invoker to enable its communication with the Wasm executor we will implement, instead of the Docker daemon. Fortunately, the Invoker is already well-separated from the concrete containerization technology through a Service Provider Interface (SPI). OpenWhisk already supports Docker, but also Kubernetes as the container management system, such that the SPI was a logical addition. We implement a \inl{WasmContainer} that extends OpenWhisk's \inl{Container} abstraction, which already handles container communication, such as calling the \inl{/init} and \inl{/run} endpoints.
 
-% Figure that shows a zoomed-in version of the invoker and its SPIs (as well as the Wasm runtime?) - Help better understand OW's design and what we added
+% Figure that shows a zoomed-in version of the invoker and its SPIs (as well as the Wasm executor?) - Help better understand OW's design and what we added
 
-In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the \inl{WasmRuntime}. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server; increasing both the module's size and its runtime overhead. That presupposes, that the \inl{WasmRuntime} can handle a potentially large amount of requests.
+In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the Wasm executor. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server, which would both increase the module's size and its runtime overhead. That presupposes, that the Wasm executor can handle a potentially large amount of requests.
 
-% Need to decide whether OW handles containers life cycle or if runtime takes that responsibility
+% Need to decide whether OW handles containers life cycle or if executor takes that responsibility
 
-The runtime also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. A general requirement for a useful Wasm runtime would also be its ability to run on different instruction set architectures.
+The executor also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. A general requirement for a useful Wasm executor would also be its ability to run on different instruction set architectures.
 
-In summary, the requirements for our runtime are
+In summary, the requirements for our executor are
 
 \begin{enumerate}
     \item It needs to be fast to alleviate the cold-start problem.
@@ -103,9 +103,9 @@ In summary, the requirements for our runtime are
 
 \section{Implementation}
 
-To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based invoker will be replaced, to forward all the incoming requests to our new Wasm runtime.
+To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based invoker will be replaced, to forward all the incoming requests to our new Wasm executor. 
 
-The Wasm runtime will be written from scratch in the Rust programming language. There are a number of reasons for this choice.
+The Wasm executor will be written from scratch in the Rust programming language. There are a number of reasons for this choice.
 
 \begin{itemize}
   \item It is a compiled language with performance close to that of C.
@@ -115,9 +115,11 @@ The Wasm runtime will be written from scratch in the Rust programming language. 
   \item 3 out of the 4 Wasm executors investigated here are written in Rust, so embedding them is efficient and well documented.
 \end{itemize}
 
-The runtime consists of a web server that can take requests from the invoker asynchronously and concurrently. Because OpenWhisk doesn't communicate with the Wasm modules directly, but through the runtime, the \inl{/start} endpoint simply returns the runtimes own network address. This endpoint also returns an identifier for the container, so that OpenWhisk can handle its life cycle, i.e. the above-mentioned mechanism of keeping it warm for some time, for a faster subsequent invocation. There is a chance that this mechanism may not be necessary for Wasm modules, as they are much more lightweight in their instantiation. We will come back to this question later in our optimization discussion.
+The layer will be generic over the underlying WebAssembly runtime, such that we can use different ones and compare them more easily.
 
-The entry point into our runtime will be through HTTP endpoints. In order for our runtime to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library.
+The executor consists of a web server that can take requests from the invoker asynchronously and concurrently. Because OpenWhisk doesn't communicate with the Wasm modules directly, but through the executor, the \inl{/start} endpoint simply returns the executors own network address. This endpoint also returns an identifier for the container, so that OpenWhisk can handle its life cycle, i.e. the above-mentioned mechanism of keeping it warm for some time, for a faster subsequent invocation. There is a chance that this mechanism may not be necessary for Wasm modules, as they are much more lightweight in their instantiation. We will come back to this question later in our optimization discussion.
+
+The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library.
 Rust's async model works with \inl{Futures} -- also known as Promises in JavaScript -- which represent values that have not yet been computed. Contrary to \inl{Promises} however, Rust's \inl{Futures} are lazy: They do nothing unless actively polled. This task falls to \inl{async} runtimes, of which \inl{async-std} provides one. In \inl{async-std} the unit of execution is a \inl{Task}, which is similar to a \inl{Thread}, except it is driven to completion by the user space runtime instead of the OS. Many of those tasks are executed on the same thread, and by default, a \inl{Thread} per logical CPU core is spawned. Thus we have $M \cdot N$ tasks in total, where $M$ is the number of tasks per thread and $N$ the number of logical CPU cores.
 From that, a second distinction is implied. A \inl{Task} should not do a blocking or long-running operation, like reading from a file via the standard library's \inl{std::fs::read_to_string}. Instead, it should use the \inl{async} version of that method, from \inl{async-std}, which does not block the thread. Otherwise, all other $M - 1$ tasks, which are executed on the same thread, will also be blocked, even though they may be able to make progress. Note that, we could still process $N$ requests concurrently, even if tasks block, but that doesn't scale well enough. This is why async functions are also called cooperative routines (coroutines). When they need to wait for the OS to finish a task, they \emph{yield} to another routine, which can then continue actual work.
 
