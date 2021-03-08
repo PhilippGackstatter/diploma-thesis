@@ -18,7 +18,7 @@ In the context of serverless computing, a cold start refers to the invocation of
 
 \citeauthor{Wang2018} have measured the cold start latency at major cloud providers such as Amazon Web Services (AWS) and Google Cloud Platform. The median cold start latency for AWS was between 250 ms (1536 MB) and 265 ms (128 MB) and between 110 ms (2048 MB) and 493 ms (128 MB) for Google, both depending on the amount of memory assigned to the instance \cite{Wang2018}.
 
-Cold starts prevent serverless platforms from scaling to zero in practice, because subsequent invocations of the same function would not be performant enough. Thus, typical optimizations are to keep these resources provisioned, such that repeated requests are faster to execute. Apache OpenWhisk for instance, keeps a functions container paused and ready for reuse for 10 minutes, before removing it entirely.
+Cold starts prevent serverless platforms from scaling to zero in practice. If every function would be executed in a newly provisioned container, subsequent invocations of the same function would not be performant enough. Thus, typical optimizations are to keep these resources provisioned, such that repeated requests are faster to execute. Apache OpenWhisk for instance, keeps a functions container paused and ready for reuse for 10 minutes, before removing it entirely. AWS Lambda's cold start policy has been reverse-engineered, and the findings indicate that an instance stays alive for 5 to 7 minutes, during which time no cold start will take place \cite{ShilCold2021}.
 
 \subsection{Serverless Edge Computing}
 
@@ -27,7 +27,7 @@ With the growing number of IoT devices, we're \quot{entering the post-cloud era}
 One piece of the puzzle towards realizing this paradigm, is serverless edge computing. \citeauthor{Aslanpour2021} lay out the vision for serverless edge computing, of which we want to highlight a few.
 
 \begin{itemize}
-    \item Due to IoT devices' unpredictable workload, an under- or overprovisioning of static resources such as VMs or containers is likely. Serverless with its ability to scale to zero (with above's caveats) provides more precise provisioning of resources and only incurs cost when used, bringing advantages for operator and user, respectively. In an energy-constrained setting such as on single-board computers (SBC) executing serverless workloads, this becomes doubly-important.
+    \item Due to IoT devices' unpredictable workload, an under- or overprovisioning of static resources such as VMs or containers is likely. Serverless with its ability to scale to zero (even with above's caveat) provides more precise provisioning of resources and only incurs cost when used, bringing advantages for operator and user, respectively. In an energy-constrained setting such as on single-board computers (SBC) executing serverless workloads, this becomes doubly-important.
     \item IoT architectures are usually event-driven, making them a perfect fit for serverless, as already described above.
     \item Serverless computing tends to be used for unpredictable, bursty workloads that require immediate up-scaling. The event-driven nature of IoT applications fits this pattern well \cite{Aslanpour2021}.
 \end{itemize}
@@ -35,19 +35,21 @@ One piece of the puzzle towards realizing this paradigm, is serverless edge comp
 Serverless computing can be the enabler for edge computing. But some of its original design decisions need to be reexamined, as \citeauthor{Nastic2018} point out, due to the
 
 \begin{quote}
-    \quot{[...] inherently different nature of Edge infrastructure, for example, in terms of available resources network, geographical hyper-distribution, very large scale, etc.}
+    \quot{[...] inherently different nature of Edge infrastructure, for example, in terms of available resources, network, geographical hyper-distribution, very large scale, etc. \cite{Nastic2018}}
 \end{quote}
 
 This motivates our work to reexamine one of the fundamental building blocks of serverless computing, in order to close a gap towards the vision of serverless edge computing.
 
 \section{Serverless workload}
 
-Since the edge computing paradigm is already well-aligned with cloud-based serverless computing, we think that a solution that works well for one, should work well for the other with some adjustments. Serverless functions should already be as lightweight and small-scale as possible in either scenario, so the goals for both are well-aligned.
+Since the edge computing paradigm is already well-aligned with cloud-based serverless computing, we think that a solution that works well for one, should work well for the other with minimal adjustments. Serverless functions should already be as lightweight as possible in either scenario, so the goals for both are well-aligned.
 To understand what our solution must satisfy we want to examine the type of workload that is typical for serverless more closely.
 
 \citeauthor{Shahrad2020} have characterized the serverless workload at a large cloud-provider, Microsoft Azure. Because of their large number of users, this study can be considered very representative of the average workload.
 They find that on average 81\% of the functions are invoked less than once per minute. However, those accessed more frequently make up 99.6\% of all invocations \cite{Shahrad2020}.
-Those frequently accessed functions should thus be kept in memory, to avoid the cold start entirely. The less frequently accessed functions should not be kept in memory, but created, executed and destroyed immediately, in order to save resources. For this to be viable, the cold-start needs to be a cheap operation. In general, the cheaper the cold start, the smaller the amount of time that functions need to be kept in memory. This is great for the operators of a serverless platform, since customers are only billed the execution time of the function, but keeping functions in memory -- or resources warm, more generally -- has costs for the operator. Thus, shorter cold starts reduces costs.
+
+Those frequently accessed functions should thus be kept in memory, to avoid the cold start entirely. The less frequently accessed functions should not be kept in memory, but created, executed and destroyed immediately, in order to save resources. For this to be viable, the cold-start needs to be a cheap operation. In general, the cheaper the cold start, the smaller the amount of time that functions need to be kept in memory.
+Customers are only billed for the execution time of the function in FaaS. Operators bear the cost of keeping functions in memory -- or resources warm, more generally. Thus, shorter cold starts reduce costs.
 
 \citeauthor{Shahrad2020} also find that on average, 50\% of functions execute for less than one second.
 
@@ -56,7 +58,8 @@ Those frequently accessed functions should thus be kept in memory, to avoid the 
 \end{quote}
 
 This is corroborated by the findings of \citeauthor{Wang2018} above.
-Because of those, the primary goal in this work is that of reducing the cold start latency, to make that first function invocation less costly. However, we also need to make sure that what we have a resource-efficient way to keep the function in memory, since the most frequently accessed ones make up the overwhelming share of invocations and cold starting them would be even more costly. Thus we also investigate the resource usage of WebAssembly modules in memory.
+Because of those, the primary goal in this work is that of reducing the cold start latency, to make the first function invocation less costly. However, we also need to make sure that what we have a resource-efficient way to keep the function in memory, since the most frequently accessed ones make up the overwhelming share of invocations and cold starting them would be even more costly.
+As \citeauthor{Shahrad2020} point out, there is a fundamental trade-off between using memory to keep functions warm, and not using it, but taking the hit in additional latency, caused by cold starting the function. Thus, unless we can eliminate the cold start completely, we will need some kind of keep-alive policy. Hence, we also investigate the resource usage of WebAssembly modules in memory.
 
 % Expand with http://faculty.washington.edu/wlloyd/courses/tcss562/papers/ServerlessApplications-WhyWhenandHow.pdf
 % To   summarize,   serverless   applications   aremost commonly used for short-running tasks withlow data volume and bursty workload. However,contrary to popular belief, serverless applicationsare  also  widely  used  for  latency-critical,  high-volume  core  functionality.  Overall,  there  are  ex-amples of serverless applications across all appli-cation types, requirements, and workloads.
