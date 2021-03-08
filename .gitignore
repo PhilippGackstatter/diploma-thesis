@@ -3,6 +3,7 @@
 thesis.pdf
 # Files that are generated
 figures/*.pdf
+figures/*.pgf
 
 ## Core latex/pdflatex auxiliary files:
 *.aux
