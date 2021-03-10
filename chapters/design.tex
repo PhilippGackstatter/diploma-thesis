@@ -128,7 +128,11 @@ In summary, the requirements for our executor are
     \item It needs to be able to efficiently handle a large amount of I/O concurrently, due to all requests being proxied through.
 \end{enumerate}
 
-\section{Implementation}
+
+
+
+\section{Executor implementation}
+
 
 To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based invoker will be replaced, to forward all the incoming requests to our new Wasm executor. 
 
@@ -142,7 +146,31 @@ The Wasm executor will be written from scratch in the Rust programming language.
   \item 3 out of the 4 Wasm executors investigated here are written in Rust, so embedding them is efficient and well documented.
 \end{itemize}
 
-The layer will be generic over the underlying WebAssembly runtime, such that we can use different ones and compare them more easily.
+\begin{listing}[ht]
+\begin{minted}{rust}
+#[async_std::main]
+async fn main() -> anyhow::Result<()> {
+    let runtime = ow_wasmtime::Wasmtime::default();
+
+    let mut app = tide::with_state(runtime);
+
+    app.at("/start").post(core::start);
+    app.at("/init").post(core::init);
+    app.at("/run").post(core::run);
+
+    app.listen("127.0.0.1:9000").await.unwrap();
+
+    Ok(())
+}
+\end{minted}
+\caption{The main function of our WebAssembly executor.}
+\label{listing:wasm-executor-main}
+\end{listing}
+
+The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library. The main function in listing \ref{listing:wasm-executor-main} suits itself well to describe the architecture. The \inl{#[async_std::main]} macro starts this program in an asynchronous runtime, which enables us to use \inl{async} functions and \inl{await} them. The async runtime thus allows multiple concurrent requests to one of the endpoints, without us having to spawn threads explicitly. Although, we will come back to this later when it becomes necessary to spawn workloads onto dedicated threads -- and go into more detail on \inl{async-std}.
+
+We can instantiate one of our three runtimes -- our \inl{wasmtime} wrapper in this case -- and use it as state. \inl{tide} will inject this state into each request, so it must be thread-safe. We give \inl{tide} a function pointer for each endpoint and listen on a local address.
+
 
 The executor consists of a web server that can take requests from the invoker asynchronously and concurrently. Because OpenWhisk doesn't communicate with the Wasm modules directly, but through the executor, the \inl{/start} endpoint simply returns the executors own network address. This endpoint also returns an identifier for the container, so that OpenWhisk can handle its life cycle, i.e. the above-mentioned mechanism of keeping it warm for some time, for a faster subsequent invocation. There is a chance that this mechanism may not be necessary for Wasm modules, as they are much more lightweight in their instantiation. We will come back to this question later in our optimization discussion.
 
