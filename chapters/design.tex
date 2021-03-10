@@ -114,18 +114,18 @@ In figure \ref{fig:wasm-openwhisk-action-invocation-flow} we have sketched the h
 
 % Figure that shows a zoomed-in version of the invoker and its SPIs (as well as the Wasm executor?) - Help better understand OW's design and what we added
 
-In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the Wasm executor. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server, which would both increase the module's size and its runtime overhead. That presupposes, that the Wasm executor can handle a potentially large amount of requests.
+In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the Wasm executor. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server, which would both increase the module's size and its runtime overhead. The disadvantage is the single point of failure. That is offset by the bigger picture of OpenWhisk, where in a truly resilient deployment, we already have multiple Invokers. A failing Wasm executor would let the entire Invoker unit fail, but others could potentially take over in that scenario. That also presupposes, that the Wasm executor can handle a potentially large amount of requests.
 
 % Need to decide whether OW handles containers life cycle or if executor takes that responsibility
 
-The executor also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. A general requirement for a useful Wasm executor would also be its ability to run on different instruction set architectures.
+The executor also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. In order to enable execution on all kinds of platforms, including edge devices, another requirement for a useful Wasm executor is its ability to run on different instruction set architectures.
 
 In summary, the requirements for our executor are
 
 \begin{enumerate}
     \item It needs to be fast to alleviate the cold-start problem.
-    \item It needs to run on devices with potentially different instruction set architectures.
-    \item It needs to be able to efficiently handle a large amount of I/O concurrently, due to all requests being proxied through
+    \item It needs to run on devices with potentially different instruction set architectures (at least x86\_64 and ARM).
+    \item It needs to be able to efficiently handle a large amount of I/O concurrently, due to all requests being proxied through.
 \end{enumerate}
 
 \section{Implementation}
