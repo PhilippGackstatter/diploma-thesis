@@ -15,6 +15,33 @@ Serverless enables the execution of \quot{polgylot tenant-provided code} \cite{N
 
 \citeauthor{Mendki2020} compared WebAssembly and Docker container startup times, and found WebAssembly being 91\% faster than containers and used 75\% less memory \cite{Mendki2020}. \citeauthor{Hall2019} find their WebAssembly-based serverless platform fared 60\% better on average, than the Docker container solution, for their concurrent \quot{Multiple Client, Multiple Access} workload \cite{Hall2019}. These promising results are the basis for our work and validate the core idea of our approach.
 
+
+\section{WebAssembly runtimes}
+
+WebAssembly is a specification \footnote{\url{https://webassembly.org/specs/}}. Implementations adhering to this spec are WebAssembly runtimes. Since Wasm was originally designed for the web, the virtual machines of browsers, such as Google's V8 or Mozilla's SpiderMonkey, can also execute WebAssembly in addition to JavaScript. With the rise of Wasm outside the Web, a large number of standalone runtimes have emerged and many are actively being developed. This section will introduce a number of runtimes with different execution models, and justify our choice of runtimes to implement in our executor.
+
+
+\subsection{Wasmtime and Lucet}
+
+Wasmtime \footnote{\url{https://github.com/bytecodealliance/wasmtime}} is a runtime that has support for Just-in-Time compilation, available for the x86\_64 and aarch64 instruction set architectures (ISA). It supports the latest WASI standards and is written in Rust and thus easily embeddable from there.
+Wasmtime is closely related to the \inl{cranelift} project, which it uses for code generation. Thus, we expect wasmtime to be a high-quality JIT implementation.
+
+Lucet \footnote{\url{https://github.com/bytecodealliance/lucet}} is the compiler and runtime used for cloud provider fastly's Terrarium, a platform for running WebAssembly on edge devices \cite{fastly2019}. It consists of a compiler and a runtime to execute WebAssembly. The compiler, \inl{lucetc}, compiles Wasm modules to native object or shared object files. The complementary \inl{lucet-runtime} can then load the native code and call the contained Wasm functions. Because of this compilation model, execution can reach near-native speeds. However, the execution is not sandboxed by default, requiring mechanisms like \inl{seccomp-bpf} \footnote{\url{https://wiki.mozilla.org/Security/Sandbox/Seccomp}}, and the security model is actively being developed. It is currently only available on the x86\_64 ISA. Since we require support for edge devices, typically built on the arm ISA, we will not be using \inl{lucet}. Furthermore, the lack of full sandboxing makes other runtimes a better choice.
+
+\subsection{Wasmer}
+
+Wasmer \footnote{\url{https://github.com/wasmerio/wasmer}} is a WebAssembly runtime with support for the three major platforms and x86\_64 and aarch64 ISAs. Notably, wasmer has already reached version \inl{1.0}, indicating a certain level of maturity. The runtime offers three different compilers, \inl{singlepass}, \inl{cranelift} and \inl{LLVM}, whose compilation times get slower and execution times get faster, in that order, respectively. The runtime then has a JIT and a Native engine, which differ in the way the module is loaded. In particular, the Native engine produces a shared object, which can be loaded with a fast \inl{dlopen} call. The support for high-quality AoT compilation with \inl{LLVM} and fast startup times makes wasmer a good choice for our purpose.
+
+\subsection{WebAssembly Micro Runtime and WASM3}
+
+Due to Wasm's simplicity in the binary format, there is wide-spread interest for running it on embedded devices. An example of that is \inl{wasm3} \footnote{\url{https://github.com/wasm3/wasm3}}, a Wasm interpreter that claims to be the fastest. They argue in favor of interpretation over JIT or AOT compilation, since startup latency is more important in many situations. Furthermore, portability and security are easier to achieve with this approach and development with the virtual machine is easier. Still, a performance penalty of 4 to 5x compared to JIT or 12x compared to native execution, leads us to believe that no amount of startup latency gain can make up for the performance loss. Even though our primary goal is reducing the cold start latency, the execution that follows cannot lack behind Docker containers massively, if adoption is to succeed. The relation between startup and execution performance is too far out of balance in this case.
+
+However, there is still value in runtimes written specifically for embedded devices. The WebAssembly Micro Runtime (\inl{wamr}) \footnote{\url{https://github.com/bytecodealliance/wasm-micro-runtime/}} has support for all three mentioned execution modes. It has low memory usage and binary size. For example, the claimed binary size of the AoT runtime is just 50 kilo bytes. Further, the AoT runtime claims near-native speed. For execution on edge devices this may allow more modules to be executed compared to heaver-weight runtimes.
+
+
+
+
+
 \section{Requirements}
 
 \subsection{Apache OpenWhisk}
