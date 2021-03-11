@@ -66,6 +66,8 @@ The goal of this work is to evaluate the viability of WebAssembly in serverless 
 
   \item How do the performance characteristics of the Wasm and container runtimes differ?
 
+  \item What are the resource costs for keeping functions warm in both approaches?
+
   \item Which Webassembly runtime is most suitable for the use on heterogeneous edge devices?
 
 
@@ -83,7 +85,9 @@ The first research question aims to examine whether our core hypothesis holds. T
 
 The second question seeks answers to the performance of both container technologies at runtime. More specifically, at what speed can code be executed and what resources, such as CPU or memory, are required. We will evaluate this under similar circumstances as before.
 
-The third question is directed at finding the WebAssembly runtime best suited for the execution of modules on low-energy and resource-constrained edge devices. We will use a single-board computer such as a Raspberry Pi to run our serverless environment on and evaluate the different runtimes from there.
+The third question should help us find out, what the cost of not being able to truly scale-to-zero is.
+
+The fourth question is directed at finding the WebAssembly runtime best suited for the execution of modules on low-energy and resource-constrained edge devices. We will use a single-board computer such as a Raspberry Pi to run our serverless environment on and evaluate the different runtimes from there.
 
 \section{Contributions}
 
