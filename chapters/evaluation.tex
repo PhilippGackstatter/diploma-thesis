@@ -3,7 +3,14 @@
 
 \section{Setup}
 
-We want to measure cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. In the cold start case, OpenWhisk additionally attaches an \inl{initTime} annotation to the record, which is the cold start latency. The record also contains a \inl{duration} field which is the duration of the entire execution, including a potential cold start time. In figure \ref{fig:evaluation-time-measurement} we show an overview of the two measurements we calculate.
+\subsection{Deployment}
+
+We will use an Apache OpenWhisk deployment in lean mode, which was specifically developed for edge devices.
+\todo{Expand...}
+
+\subsection{Methodology}
+
+We want to measure the cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. In the cold start case, OpenWhisk additionally attaches an \inl{initTime} annotation to the record, which is the cold start latency. The record also contains a \inl{duration} field which is the duration of the entire execution, including the potential cold start time. In figure \ref{fig:evaluation-time-measurement} we show an overview of the two measurements we calculate.
 
 \begin{figure}
     \begin{center}
@@ -19,21 +26,21 @@ We want to measure cold start latency and action execution time across all our e
 
 % Possibly cite https://www.sciencedirect.com/science/article/pii/B9780124201583000137?via%3Dihub
 
-The lack of existing research on serverless workloads -- particularly whether they're CPU- or I/O-bound -- indicates that we need to examine the system for both types.
+The lack of existing research on whether serverless workloads are CPU- or I/O-bound, indicates that we need to examine the system for both types.
 
-There are many papers measuring performance of serverless systems.
+There are a few papers measuring serverless performance which also describe their approach in more detail. We use those as a basis for our evaluation.
 
 \begin{itemize}
     \item \citeauthor{McGrath2017} use concurrency and backoff tests. The concurrency test starts by issuing a request to the platform and reissues it as soon as it completes. At a fixed interval, it adds another request up to an upper bound. The performance metric is responses per second. The backoff test measures cold start times by issuing single requests at increasing intervals, in order to trigger the platforms deallocation of warm containers \cite{McGrath2017}.
-    \item \citeauthor{Hall2019} characterize serverless function access patterns based on a real-world scenario. They describe three different patterns: Non-concurrent requests from a single client; multiple clients making a single request, possibly concurrent; multiple clients making multiple concurrent requests \cite{Hall2019}.
+    \item \citeauthor{Hall2019} characterize serverless function access patterns based on a real-world scenario. They describe three different patterns: Non-concurrent requests from a single client; multiple clients making a single request, possibly concurrent; multiple clients making multiple requests, possibly concurrent \cite{Hall2019}.
 \end{itemize}
 
 In the interest of reducing complexity, we will run multiple evaluations and measure for the least amount of dimensions. Those evaluations are:
 
 \begin{enumerate}
-    \item To evaluate the cold start latency we will send single requests to our deployment on an edge device with varying modules, representing either CPU- or I/O-bound actions. We repeat this measurement for all our Wasm runtimes. We use a similar approach as \citeauthor{McGrath2017} in their backoff test. In our case, we can fix the interval, since we can configure the deallocation time as well. This measurement will aid in answering research question 1.
-    \item To evaluate the performance of the system we will run concurrent requests against an edge device under a mixed workload consisting of equal amounts of CPU- and I/O-bound actions. We repeat this measurement for all our Wasm runtimes. We use the approach by \citeauthor{McGrath2017} in their concurrency test, and pick workload types at random. This is to ensure that we evaluate the system for both types and because it is closer to a real-world scenario than measuring one type in isolation. It is also similar to the approach of \citeauthor{Hall2019}, in that we also have multiple concurrent requests but multiple clients are replaced by diverse workload types, which is likely equivalent. This measurement will help us answer research question 2.
-    \item Since serverless systems keep their containers warm for some time, the memory they claim is of interest. We will measure the memory footprint of keeping containers warm. \todo{Memory footprint of container during execution? Is that interesting?} We measure this footprint only on the container technology. For Docker we use \inl{docker stats} and for our executor we use \inl{heaptrack} \footnote{\url{https://github.com/KDE/heaptrack}}. This measurement allows answering research question 3.
+    \item To evaluate the cold start latency we will send single requests to our deployment on an edge device with varying Wasm modules, representing either CPU- or I/O-bound actions. The goal is to examine the effect of the Wasm runtime's execution model (i.e. JIT, AoT or interpreted) on the cold start latency juxtaposed with the workload types. We also run it against the Docker-based baseline OpenWhisk. We use a similar approach as \citeauthor{McGrath2017} in their backoff test. In our case, we can fix the interval, since we can configure the deallocation time as well. This measurement will aid in answering research question 1.
+    \item To evaluate the performance of the system we will run concurrent requests against an edge device under a mixed workload consisting of equal amounts of CPU- and I/O-bound actions. We repeat this measurement for all our Wasm runtimes and for baseline OpenWhisk. We use the approach by \citeauthor{McGrath2017} in their concurrency test, and pick workload types at random. This is to ensure that we evaluate the system for both types and because it is closer to a real-world scenario than measuring one type in isolation. It is also similar to the approach of \citeauthor{Hall2019}, in that we also have multiple concurrent requests but multiple clients are replaced by diverse workload types, which is likely equivalent. This measurement will help us answer research question 2.
+    \item Since serverless systems keep their containers warm for some time, the memory they claim is of interest. We will measure the memory footprint of keeping containers warm. \todo{Memory footprint of container during execution? Is that interesting?} We measure only the footprint of the container technology, not OpenWhisk. For Docker we use \inl{docker stats} and for our executor we use \inl{heaptrack} \footnote{\url{https://github.com/KDE/heaptrack}}. This measurement allows answering research question 3.
 \end{enumerate}
 
 Finally, all measurements will lead us to a conclusion on research question 4.
