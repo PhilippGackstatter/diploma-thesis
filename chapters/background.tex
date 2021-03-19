@@ -41,6 +41,7 @@ Serverless computing can be the enabler for edge computing. But some of its orig
 This motivates our work to reexamine one of the fundamental building blocks of serverless computing, in order to close a gap towards the vision of serverless edge computing.
 
 \section{Serverless workload}
+\label{section:serverless_workload}
 
 Since the edge computing paradigm is already well-aligned with cloud-based serverless computing, we think that a solution that works well for one, should work well for the other with minimal adjustments. Serverless functions should already be as lightweight as possible in either scenario, so the goals for both are well-aligned.
 To understand what our solution must satisfy we want to examine the type of workload that is typical for serverless more closely.
@@ -61,8 +62,7 @@ This is corroborated by the findings of \citeauthor{Wang2018} above.
 Because of those, the primary goal in this work is that of reducing the cold start latency, to make the first function invocation less costly. However, we also need to make sure that what we have a resource-efficient way to keep the function in memory, since the most frequently accessed ones make up the overwhelming share of invocations and cold starting them would be even more costly.
 As \citeauthor{Shahrad2020} point out, there is a fundamental trade-off between using memory to keep functions warm, and not using it, but taking the hit in additional latency, caused by cold starting the function. Thus, unless we can eliminate the cold start completely, we will need some kind of keep-alive policy. Hence, we also investigate the resource usage of WebAssembly modules in memory.
 
-% Expand with http://faculty.washington.edu/wlloyd/courses/tcss562/papers/ServerlessApplications-WhyWhenandHow.pdf
-% To   summarize,   serverless   applications   aremost commonly used for short-running tasks withlow data volume and bursty workload. However,contrary to popular belief, serverless applicationsare  also  widely  used  for  latency-critical,  high-volume  core  functionality.  Overall,  there  are  ex-amples of serverless applications across all appli-cation types, requirements, and workloads.
+\citeauthor{Eismann2021} conducted a study on why companies adopt serverless, for which applications it is best-suited and how they are implemented. They analyzed 89 open-source serverless applications, of which 84\% have bursty workloads. Thus, serverless platforms need to be able to handle concurrent requests well. 69\% of the applications have a data volume of less than 10 MB. Thus, memory-bound applications are likely not a primary use case. Further, they find 39\% of the applications have a high traffic intensity, 47\% have a low traffic intensity and 17\% utilize scheduled functions. Thus, the latter combined 64\% represent on-demand scenarios where the platform will experience cold starts, since it is less likely that a warm function exists in those cases. According to the authors, 88\% of the applications make use of Backend-as-a-Service (BaaS) offerings. Storage, databases and messaging services are the most popular ones \cite{Eismann2021}. Hence, the majority of functions will make requests to external services, oftentimes implemented with HTTP which means those functions will frequently wait for network I/O to complete while the CPU is not actively utilized. More generally, I/O-bound workloads are a primary type that serverless platforms should be able to handle well.
 
 \section{WebAssembly}
 
