@@ -157,9 +157,9 @@ async fn main() -> anyhow::Result<()> {
 
     let mut app = tide::with_state(runtime);
 
-    app.at("/start").post(core::start);
-    app.at("/init").post(core::init);
-    app.at("/run").post(core::run);
+    app.at("/:container_id/init").post(core::init);
+    app.at("/:container_id/run").post(core::run);
+    app.at("/:container_id/destroy").post(core::destroy);
 
     app.listen("127.0.0.1:9000").await.unwrap();
 
@@ -170,16 +170,92 @@ async fn main() -> anyhow::Result<()> {
 \label{listing:wasm-executor-main}
 \end{listing}
 
-The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library. The main function in listing \ref{listing:wasm-executor-main} suits itself well to describe the architecture. The \inl{#[async_std::main]} macro starts this program in an asynchronous runtime, which enables us to use \inl{async} functions and \inl{await} them. The async runtime thus allows multiple concurrent requests to one of the endpoints, without us having to spawn threads explicitly. Although, we will come back to this later when it becomes necessary to spawn workloads onto dedicated threads -- and go into more detail on \inl{async-std}.
+The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library. The main function in listing \ref{listing:wasm-executor-main} suits itself well to describe the architecture. The \inl{\#[async_std::main]} macro starts this program in an asynchronous runtime, which enables us to use \inl{async} functions and \inl{await} them. The async runtime allows multiple concurrent requests to one of the endpoints, without us having to spawn threads explicitly. Although, we will come back to this later when it becomes necessary to spawn workloads onto dedicated threads -- and go into more detail on \inl{async-std}.
 
-We can instantiate one of our three runtimes -- our \inl{wasmtime} wrapper in this case -- and use it as state. \inl{tide} will inject this state into each request, so it must be thread-safe. We give \inl{tide} a function pointer for each endpoint and listen on a local address.
+We can instantiate one of our three runtimes -- our wrapper around \inl{wasmtime} in this example -- and use it as state, which is shared among requests. To start a container, the \inl{WasmContainer} in OpenWhisk generates a new universally unique identifier (uuid), without having to communicate with the Wasm executor at all. This is possible because there is no setup for each Wasm container, that needs to happen ahead-of-time, like network namespace creation for Docker containers. The actual work happens in the endpoints, which are parameterized by the container id. \inl{/init} is called once by OpenWhisk per container, to initialize the container with the module's code. Although different for each runtime; in general, this endpoint will do any work that can be frontloaded and which takes a significant amount of time. \inl{/run} is invoked potentially many times, so any work that is not frontloaded would multiply there. Of course, \inl{/init} is the potential culprit for the cold start latency, so our focus is on reducing even the amount work this endpoint needs to handle. We describe the optimizations to that end, later in this chapter. Once OpenWhisk decides to destroy the container, it does so through \inl{/destroy}.
+Finally, we give \inl{tide} a function pointer for each endpoint and listen on a local address.
 
+\subsection{Fast cold starts}
+In serverless platforms there are roughly three important steps, in order for a user's code to be executed. Uploading the code to the platform, initializing the execution environment (cold start), and running it. The two latter steps are already part of the execution path; they occurr when the user already wants to run the code. Thus, at the cold start, the action should already be well-optimized for execution and as little preperation ought to happen. WebAssembly is binary target format, however not one, that is ready for \emph{fast} execution. It can be interpreted right away -- thus a small cold start time -- but exeuction performance will massively lack behind compared to native code, which is unacceptable for serverless. So compilation to native code is essential for good runtime performance, but it also takes time for that to be applied to a Wasm module. Given this trade-off, it would seem that Just-in-Time compilation should be the best model. In \inl{wasmtime}, our JIT-runtime of choice, compilation of a simple, WASI-enabled module (1,6 MB) still takes 36 milliseconds (or 40 milliseconds when optimizing the Wasm for speed) on our test machine. This time represents 98\% of the entire execution time, including setting up every other part of the runtime as well as the execution of the module itself. Thus, unsuprisingly, the cold start is defined almost entirely by the compilation phase. For comparison, the cold start time of the \inl{hello-world} Docker image on the same machine is 452 milliseconds. This number is roughly in line with the cold start times of AWS Lambda or Google Cloud Function, that we've cited in chapter \ref{chapter:background}. While the JIT cold start is an order of magnitude faster than the startup times of Docker containers, it is arguably still on the same order of magnitude as the execution time of some actions. An improvement of another order of magnitude would likely be an acceptable cold start latency.
+Furthermore, since the compilation phase takes up such a big chunk of the overall time, it is the most obvious starting point for optimizations.
+% TODO: Try to figure out from the Azure data set how many functions execute within 10-100ms and how many <= 10ms to support that point.
+
+In contrast to browsers, which receive JavaScript or WebAssembly just-in-time, and thus need to compile it in the same manner, a serverless platform takes ownership of a module earlier. When a user uploads a module to the platform, it has an almost unconstrained amount of time to apply optimizations to the module, and make it ready for a fast startup \emph{and} execution; solving the previously described dilemma. The key idea is to run the expensive module creation ahead of time, where time means the time of execution. It doesn't matter in this case, whether the actual execution model of the underlying runtime is JIT or AoT. It's obvious for AoT - the code needs to be compiled ahead of time in its entirety, by definition. As we've seen, JIT also has a cold start penalty and we can complete that step ahead of time, too. We refer to this as precompilation. Once the module is precompiled, we can serialize it and store it in the database, instead of the Wasm module itself. At execution time, we deserialize it and can immediately start execution.
+
+Both \inl{wasmer} and \inl{wamr} support AoT compilation. \inl{wasmer} in particular, allows us to leverage \inl{LLVM} for highly optimized native code to produce a shared object. The runtime loads this via a fast \inl{dlopen} call. \inl{wamr} produces its own AoT format which it can then deserialize at runtime and achieve a fast startup. \inl{wasmtime} doesn't support AoT in the traditional sense, but we can still execute the expensive module creation ahead-of-time, and serialize and store the result. Thus, all the runtimes support some form of precompilation.
+
+
+
+
+
+
+
+% In section \ref{section:wasm-runtimes}, we provided an overview of different runtimes and their execution models. 
+
+\subsection{The WasmRuntime abstraction}
+
+% Main function, async-std, code-snippet, concurrency, state sharing
+% Capabilities
+% Describe rough idea of what the architecture is
+% - Main function, what init and run do
+% - The WasmRuntime abstraction
+% - Caching optimization
+% - The precompiling optimization
+% No module is shared internally between two containers. An inefficiency of the design - i.e. two containers with the same module code will store it twice. However, we should be able to set OW's concurrency to > 1, and then OW will send the request for the same module to that same container, but internally we will create a new instance of the module per-request, so we have isolation/sandboxing. And all that is efficient without having to change OW's design.
+
+
+\begin{listing}[ht]
+\begin{minted}{rust}
+pub trait WasmRuntime: Clone {
+    fn initialize(
+        &self,
+        container_id: String,
+        capabilities: ActionCapabilities,
+        module: Vec<u8>,
+    ) -> anyhow::Result<()>;
+
+    fn run(
+        &self,
+        container_id: &str,
+        parameters: serde_json::Value,
+    ) -> Result<Result<serde_json::Value, serde_json::Value>, anyhow::Error>;
+
+    fn destroy(&self, container_id: &str);
+}
+\end{minted}
+\caption{The \inl{WasmRuntime} abstraction that each Wasm runtimes implements.}
+\label{listing:wasm-executor-trait}
+\end{listing}
+
+
+The Wasm executor is generic over the underlying WebAssembly runtime, such that we can easily implement different ones and compare them. To that end, we abstract the common runtime tasks into a trait -- essentially an interface in Rust's terminology. It is shown in listing \ref{listing:wasm-executor-trait}. This trait is used as the state in our executor. Thus, each runtime can have a different state internally, while being able to share it across requests. Since all our runtime implementations follow this interface, they work in similar ways. We describe the final design for each function, while pointing out the important differences between runtimes. Afterwards, we discuss alternatives.
+
+\subsubsection{Initialization}
+The executor decodes the base64 string given by OpenWhisk and unzips ist, before calling \inl{initialize} with the result. The function initializes the container identified by the given id. In \inl{wasmtime} and \inl{wasmer}, that means deserializing the 
+The function also takes the WASI capabilities that the action should have. These are bare-bones in our prototype, since the WASI standard is still actively being developed and for example, network access is still missing.
+
+\subsubsection{Execution}
+\inl{run} executes the module associated with the given container id and with the parameters as input. In line with OpenWhisk, the parameters are a JSON object, which allows for a high degree of flexibility for the function input. Across all runtimes, this function looks up the previously stored module with the container id, creates a WASI context with the associated capabilities and executes the module. If an error occurs during the Wasm runtime setup, the outer \inl{Result} contains an \inl{anyhow::Error}, a generic, application-level error type. Since the Wasm module itself can also either succeed or fail, another \inl{Result} is nested inside, where both success and failure are represented by JSON objects.
+
+\subsubsection{Cleanup}
+Finally, the \inl{destroy} function removes the container, which simply means freeing the memory taken up by the module.
+
+% The run function returns Rust's \inl{Result} type. It is an enum, where its \inl{Ok()} variant represents success, and its \inl{Err()} variant represents an error.
+
+To our \inl{/init} endpoint, OpenWhisk sends ...
+
+
+
+\inl{tide} will inject this state into each request, so it must be thread-safe.
+
+
+\subsection{Enabling concurrency}
 
 The executor consists of a web server that can take requests from the invoker asynchronously and concurrently. Because OpenWhisk doesn't communicate with the Wasm modules directly, but through the executor, the \inl{/start} endpoint simply returns the executors own network address. This endpoint also returns an identifier for the container, so that OpenWhisk can handle its life cycle, i.e. the above-mentioned mechanism of keeping it warm for some time, for a faster subsequent invocation. There is a chance that this mechanism may not be necessary for Wasm modules, as they are much more lightweight in their instantiation. We will come back to this question later in our optimization discussion.
 
-The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library.
+
 Rust's async model works with \inl{Futures} -- also known as Promises in JavaScript -- which represent values that have not yet been computed. Contrary to \inl{Promises} however, Rust's \inl{Futures} are lazy: They do nothing unless actively polled. This task falls to \inl{async} runtimes, of which \inl{async-std} provides one. In \inl{async-std} the unit of execution is a \inl{Task}, which is similar to a \inl{Thread}, except it is driven to completion by the user space runtime instead of the OS. Many of those tasks are executed on the same thread, and by default, a \inl{Thread} per logical CPU core is spawned. Thus we have $M \cdot N$ tasks in total, where $M$ is the number of tasks per thread and $N$ the number of logical CPU cores.
-From that, a second distinction is implied. A \inl{Task} should not do a blocking or long-running operation, like reading from a file via the standard library's \inl{std::fs::read_to_string}. Instead, it should use the \inl{async} version of that method, from \inl{async-std}, which does not block the thread. Otherwise, all other $M - 1$ tasks, which are executed on the same thread, will also be blocked, even though they may be able to make progress. Note that, we could still process $N$ requests concurrently, even if tasks block, but that doesn't scale well enough. This is why async functions are also called cooperative routines (coroutines). When they need to wait for the OS to finish a task, they \emph{yield} to another routine, which can then continue actual work.
+From that, a second distinction is implied. A \inl{Task} should not do a blocking or long-running operation, like reading from a file via the standard library's \inl{std::fs::read_to_string}. Instead, it should use the \inl{async} version of that method, from \inl{async-std}, which does not block the thread. Otherwise, all other $M - 1$ tasks, which are executed on the same thread, will also be blocked, even though they may be able to make progress. Note that, we could still process $N$ requests concurrently, even if tasks block, but that doesn't scale well enough. This is why these kinds of async functions are also called cooperative routines (coroutines). When they need to wait for the OS to finish a task, they \emph{yield} to another routine, which can then continue actual work.
 
 That becomes relevant for us, when we execute WebAssembly modules. Taking the module, setting up the Wasm runtime and executing it, is a long-running computation -- and one that could block as well. This would in turn block the thread we are currently running on, which means, only $N$ Wasm modules can be executed concurrently. This is not an issue for computationally-intensive workloads, where no more work can be done concurrently, than the CPU has logical cores. However, for I/O-bound workloads, such as requests over the network, this can quickly become a bottleneck. Since one of the appealing offerings of serverless frameworks is their elasticity, we clearly need a way to handle many more requests, even if they block.
 To let other coroutines on the same thread make progress, while one executes the module, we can push the entire execution onto a thread pool. The coroutine then has the simple job to asynchronously wait for that execution to finish and collect the result. That allows the other coroutines to process more requests in the meantime.
