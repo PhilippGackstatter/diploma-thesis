@@ -17,6 +17,7 @@ Serverless enables the execution of \quot{polgylot tenant-provided code} \cite{N
 
 
 \section{WebAssembly runtimes}
+\label{section:wasm-runtimes}
 
 WebAssembly is a specification \footnote{\url{https://webassembly.org/specs/}}. Implementations adhering to this spec are WebAssembly runtimes. Since Wasm was originally designed for the web, the virtual machines of browsers, such as Google's V8 or Mozilla's SpiderMonkey, can also execute WebAssembly in addition to JavaScript. With the rise of Wasm outside the Web, a large number of standalone runtimes have emerged and many are actively being developed. This section will introduce a number of runtimes with different execution models, and justify our choice of runtimes to implement in our executor.
 
@@ -54,7 +55,7 @@ In order to understand the requirements for our Wasm-flavored OpenWhisk, we need
     \label{fig:openwhisk-action-invocation-flow}
 \end{figure}
 
-Figure \ref{fig:openwhisk-action-invocation-flow} sketches the design of OpenWhisk. Users interact with it through its API Gateway, which consists of \inl{nginx}, mostly for SSL termination, and the \inl{Controller}, which implements the main logic. It handles the creation of actions, OpenWhisk's name for serverless functions, authentication and authorization as well as invoking the action.
+Figure \ref{fig:openwhisk-action-invocation-flow} sketches the design of OpenWhisk. Users interact with it through its API Gateway, which consists of \inl{nginx}, mostly for SSL termination, and the \inl{Controller}, which implements the main logic. It handles the creation of actions - OpenWhisk's name for serverless functions - authentication and authorization as well as invoking the action.
 In the latter case, the controller uses its load balancer to determine which Invoker should handle the request, and publishes the request to an Apache Kafka queue, which the invoker is subscribed to. The controller and its load balancing take a central role in OpenWhisk, but in our figure it is represented by the API Gateway and the Load Balancer only, simply because we will not be modifying this part.
 Our focus is on the Invoker. It is the part of OpenWhisk responsible for \emph{invoking} the action. A number of steps are involved in that process \cite{OpenWhiskSystemDesign}.
 
@@ -64,9 +65,9 @@ Our focus is on the Invoker. It is the part of OpenWhisk responsible for \emph{i
     \item Finally, it injects the action's code into the container, invokes it with the given parameters and returns the result \cite{OpenWhiskSystemDesign}.
 \end{enumerate}
 
-Because OpenWhisk supports many runtimes and even the mentioned black-box image, it needs a common protocol to communicate with all of them. The just-described step 3 is the gist of that protocol. Each runtime needs to implement three endpoints. The \inl{/start} endpoint creates a new container and returns its address. The following requests to the \inl{/init} endpoint are then sent to that address, where the container receives the code and takes whatever steps necessary to make the action ready for execution. Thus, over a containers life cycle, this endpoint is called exactly once. Once initialized, the \inl{/run} endpoint can be called multiple times to execute the action \cite{OpenWhiskSystemDesign}.
+Because OpenWhisk supports many runtimes and even the mentioned black-box image, it needs a common protocol to communicate with all of them. The just-described step 3 is the gist of that protocol. Each runtime needs to implement a number of functions. The \inl{start} function creates a new container and returns its address. The following requests to the \inl{/init} endpoint are then sent to that address, where the container receives the code and takes whatever steps necessary to make the action ready for execution. Thus, over a containers life cycle, this endpoint is called exactly once. Once initialized, the \inl{/run} endpoint can be called multiple times to execute the action \cite{OpenWhiskSystemDesign}.
 
-That implies that the container isn't destroyed immediately after it has been invoked once. Indeed, OpenWhisk uses various optimizations of the described flow, in order to improve the system's performance. Among those are pre-warming containers or keeping the container running for some time after it has been invoked, before it is removed.
+That implies that the container isn't destroyed immediately after it has been invoked. Indeed, OpenWhisk uses various optimizations of the described flow, in order to improve the system's performance. Among those are pre-warming containers or keeping the container running for some time after it has been invoked, before it is removed entirely. In that case, the runtimes \inl{destroy} function is used.
 We will explore those optimizations in more depth later, to compare them to the optimizations in our Wasm runtime to better see where they coincide and differ \cite{OpenWhiskSystemDesign}.
 
 \subsection{OpenWhisk on Kubernetes}
@@ -95,8 +96,10 @@ As a \inl{kubelet}, \inl{krustlet} runs on Kubernetes worker nodes and accepts w
 
 \begin{itemize}
     \item In OpenWhisk there is a split between runtime environment, provided through the Docker image, and the code that is stored in a database, retrieved from there and injected into the container. Krustlet expects the Wasm module to be the equivalent of the container, but with the code baked in. Thus no injection is necessary. This makes it slightly harder to integrate with the current OpenWhisk model, since the Wasm module doesn't need to be stored in the database, but rather in the OCI registry. That registry would need to be part of the Kubernetes cluster for latency reasons alone, but also since the images are the Wasm modules uploaded to OpenWhisk as actions. They are specific to that OpenWhisk deployment, rather than the generic OpenWhisk runtime environments, currently stored in Docker Hub. We can assume, that the latency introduced by retrieving the image from the registry is offset by not having to retrieve the code from the database, so both solutions should perform the same in that regard.
-    \item Since there is no split anymore, every Wasm module needs to implement the OpenWhisk runtime protocol itself, instead of being able to rely on the runtime. In practice, this means implementing the \inl{/init} and \inl{/run} endpoints, where the former would no longer do anything useful, since there is no code to inject. It follows that every Wasm module needs to include an HTTP server, increasing its size above what would be needed for only its functionality. Because network support in WASI is still under active development, the alternative is to implement a \inl{wasmcloud-actor}, which essentially provides capabilities such as networking to Wasm modules \cite{WC2021}. The function can then be run by calling the \inl{/run} endpoint. Just like containers in OpenWhisk keep running for some time after having been called once, the module would also continue to listen for more requests to avoid the cold-start.
+    \item Since there is no split anymore, every Wasm module needs to implement the OpenWhisk runtime protocol itself, instead of being able to rely on the runtime implementing it once. In practice, this means implementing the \inl{/init} and \inl{/run} endpoints, where the former would no longer do anything useful, since there is no code to inject. It follows that every Wasm module needs to include an HTTP server, increasing its size above what would be needed for only its functionality. Because network support in WASI is still under active development, the alternative is to implement a \inl{wasmcloud-actor}, which essentially provides capabilities such as networking to Wasm modules \cite{WC2021}. The function can then be run by calling the \inl{/run} endpoint. Just like containers in OpenWhisk keep running for some time after having been called once, the module would also continue to listen for more requests to avoid the cold-start, for some time.
 \end{itemize}
+
+% Although, if containers are independent of the thing they were spawned from, that makes the system more resilient, thus the slightly higher cost of implementing the OW protocl + HTTP Server may be offset.
 
 While this approach has its merits, we believe that there would be higher friction for implementing it in OpenWhisk, than writing our own layer to Wasm runtimes. It provides more control over optimizing the cold-start latency as well as the execution performance, which are our main priorities.
 
@@ -106,7 +109,7 @@ Because the first-mentioned approach allows us to integrate Wasm into OpenWhisk 
 
 \begin{figure}
     \includegraphics{figures/WasmOpenWhiskActionInvocationFlow.pdf}
-    \caption{Invocation flow of a Wasm action in our modified Apache OpenWhisk. The Invoker \emph{injects} the code into the executor which \emph{creates} a Wasm Module ready for execution. It then \emph{instructs} the executor to \emph{invoke} the module with the parameters it passes. The result is passed back to the Invoker. Again, a user-definable number of one or more Invokers can exist.}
+    \caption{Invocation flow of a Wasm action in our modified Apache OpenWhisk. The Invoker \emph{injects} the code into the executor which \emph{creates} a Wasm Module ready for execution. It then \emph{instructs} the executor to \emph{invoke} the module with the parameters it passes. The result is passed back to the Invoker. Again, a deployer can define whether one or more Invokers exist.}
     \label{fig:wasm-openwhisk-action-invocation-flow}
 \end{figure}
 
@@ -140,7 +143,7 @@ The Wasm executor will be written from scratch in the Rust programming language.
 
 \begin{itemize}
   \item It is a compiled language with performance close to that of C.
-  \item It uses LLVM in the backend so that it can be compiled for almost any architecture.
+  \item It uses LLVM in the backend so it can be compiled for almost any architecture.
   \item It allows for \quot{fearless concurrency}, since the compiler can detect data races at compile time.
   \item It has good support for asynchronous I/O, so it should be able to efficiently handle a large amount of concurrent requests.
   \item 3 out of the 4 Wasm executors investigated here are written in Rust, so embedding them is efficient and well documented.
