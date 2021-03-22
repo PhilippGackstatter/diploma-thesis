@@ -1,14 +1,24 @@
 \chapter{Evaluation}
 \label{chapter:evaluation}
 
-\section{Setup}
+\section{Methodology}
 
-\subsection{Deployment}
+\subsection{Goals}
 
-We will use an Apache OpenWhisk deployment in lean mode, which was specifically developed for edge devices.
-\todo{Expand...}
+\todo{RQs...}
 
-\subsection{Methodology}
+\subsection{Workload Types}
+
+In section \ref{section:serverless_workload} we reviewed the literature, in order to characterize the serverless workload. This will inform the workloads that we'll run our evaluation under. The most important points were:
+
+\begin{itemize}
+    \item ...
+\end{itemize}
+
+\subsection{Setup}
+
+
+The lack of existing research on whether serverless workloads are CPU- or I/O-bound, indicates that we need to examine the system for both types.
 
 We want to measure the cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. In the cold start case, OpenWhisk additionally attaches an \inl{initTime} annotation to the record, which is the cold start latency. The record also contains a \inl{duration} field which is the duration of the entire execution, including the potential cold start time. In figure \ref{fig:evaluation-time-measurement} we show an overview of the two measurements we calculate.
 
@@ -23,10 +33,9 @@ We want to measure the cold start latency and action execution time across all o
 % With this setup alone, it is difficult to measure the cold start latency, since end - start would include the execution time. To lift this restriction, we additionally measure the wall clock time inside the action, when it enters its main function. Furthermore -- to maximize precision -- we also measure the timestamp at which the main function exits and ignore the activation end timestamp as a result. That leads us to our setup in figure \ref{fig:evaluation-time-measurement}. Now we can accurately measure the time it takes to get the underlying container technology initialized by taking the difference of the entry and start timestamp.
 
 % start - end includes Wasm module's memory allocation and serialization, could mention that and reference its description in the design chapter
-
 % Possibly cite https://www.sciencedirect.com/science/article/pii/B9780124201583000137?via%3Dihub
 
-The lack of existing research on whether serverless workloads are CPU- or I/O-bound, indicates that we need to examine the system for both types.
+
 
 There are a few papers measuring serverless performance which also describe their approach in more detail. We use those as a basis for our evaluation.
 
@@ -44,3 +53,12 @@ In the interest of reducing complexity, we will run multiple evaluations and mea
 \end{enumerate}
 
 Finally, all measurements will lead us to a conclusion on research question 4.
+
+\subsection{Deployment}
+
+We will use an Apache OpenWhisk deployment in lean mode, which was specifically developed for edge devices.
+\todo{Expand...}
+
+
+
+\subsection{Lessons Learned / Results}
