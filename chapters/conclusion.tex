@@ -5,6 +5,8 @@
 
 -> Less cold start latency means less time keeping containers alive (mentioned in background - serverless workload).
 
+Other attempts for speeding-up serverless have been successful, but didn't catch on. We assume this is due to custom-written application frameworks that aren't industry-proven. This is different in our case, since the public-facing interface that serverless developers need to interact with is WebAssembly, whose adoption rate is increasing.
+
 \section{Open challenges}
 
 - multi threading not in Wasm
