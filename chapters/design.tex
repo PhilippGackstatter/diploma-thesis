@@ -230,8 +230,19 @@ pub trait WasmRuntime: Clone {
 The Wasm executor is generic over the underlying WebAssembly runtime, such that we can easily implement different ones and compare them. To that end, we abstract the common runtime tasks into a trait -- essentially an interface in Rust's terminology. It is shown in listing \ref{listing:wasm-executor-trait}. This trait is used as the state in our executor. Thus, each runtime can have a different state internally, while being able to share it across requests. Since all our runtime implementations follow this interface, they work in similar ways. We describe the final design for each function, while pointing out the important differences between runtimes. Afterwards, we discuss alternatives.
 
 \subsubsection{Initialization}
-The executor decodes the base64 string given by OpenWhisk and unzips ist, before calling \inl{initialize} with the result. The function initializes the container identified by the given id. In \inl{wasmtime} and \inl{wasmer}, that means deserializing the 
-The function also takes the WASI capabilities that the action should have. These are bare-bones in our prototype, since the WASI standard is still actively being developed and for example, network access is still missing.
+The executor decodes the base64 string given by OpenWhisk and unzips it, before calling \inl{initialize} with the result. The function initializes the container identified by the given id. All runtimes store the code they're given in a thread-safe HashMap -- the \inl{dashmap} \footnote{\url{https://crates.io/crates/dashmap}} library in our case.
+
+\begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
+
+    \item[Wasmtime] In \inl{wasmtime}, we instantiate a single \inl{Engine} when the executor starts up, which is then used by all \inl{Module}s for compilation. The bytes passed through \inl{initialize} are deserialized into a \inl{Module}, which is a fast operation, and then stored in the internal HashMap. This is possible because a \inl{Module} is thread-safe so the containing HashMap can be safely shared across threads.
+
+    \item[Wasmer] In \inl{wasmer} we store both an \inl{Engine} and a \inl{Store} globally, since a \inl{Module} requires both for instantiation. We will see whether and how that affects memory consumption in chapter \ref{chapter:evaluation}. Like in \inl{wasmtime}, the \inl{Module} is thread-safe.
+
+    \item[Wamr] \inl{wamr} is originally written in C, and we use \inl{wamr_sys} \footnote{\url{https://crates.io/crates/wamr_sys}} bindings to embed it in Rust. Contrary to the other runtimes, a module in \inl{wamr} is not thread-safe. Thus, only the serialized bytes representing the module are stored in the HashMap. It follows that the deserialization happens in every \inl{run} call instead, which is slightly more expensive.
+
+\end{description}
+
+Both \inl{wasmtime} and \inl{wasmer} underline the importance of the validity of the bytes given to the respective \inl{deserialize} methods. Unlike a Wasm module, the compilation artifacts can not be validated in the same way since they already represent an initialized module. So they have to be trusted, when the corresponding Wasm module would not have to be trusted. In our prototype, the users actually supply the compilation artifacts themselves, for development convenience reasons. For an actual serverless framework making use of Wasm, it would have to take ownership of the Wasm module and do the precompilation itself, in order to trust the code.
 
 \subsubsection{Execution}
 \inl{run} executes the module associated with the given container id and with the parameters as input. In line with OpenWhisk, the parameters are a JSON object, which allows for a high degree of flexibility for the function input. Across all runtimes, this function looks up the previously stored module with the container id, creates a WASI context with the associated capabilities and executes the module. If an error occurs during the Wasm runtime setup, the outer \inl{Result} contains an \inl{anyhow::Error}, a generic, application-level error type. Since the Wasm module itself can also either succeed or fail, another \inl{Result} is nested inside, where both success and failure are represented by JSON objects.
