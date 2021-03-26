@@ -198,9 +198,6 @@ The result of keeping modules in the executor's memory, is that they are already
 % Describe rough idea of what the architecture is
 % - Main function, what init and run do
 % - The WasmRuntime abstraction
-% - Caching optimization
-% - The precompiling optimization
-% No module is shared internally between two containers. An inefficiency of the design - i.e. two containers with the same module code will store it twice. However, we should be able to set OW's concurrency to > 1, and then OW will send the request for the same module to that same container, but internally we will create a new instance of the module per-request, so we have isolation/sandboxing. And all that is efficient without having to change OW's design.
 
 
 \begin{listing}[ht]
@@ -245,7 +242,38 @@ The executor decodes the base64 string given by OpenWhisk and unzips it, before 
 Both \inl{wasmtime} and \inl{wasmer} underline the importance of the validity of the bytes given to the respective \inl{deserialize} methods. Unlike a Wasm module, the compilation artifacts can not be validated in the same way since they already represent an initialized module. So they have to be trusted, when the corresponding Wasm module would not have to be trusted. In our prototype, the users actually supply the compilation artifacts themselves, for development convenience reasons. For an actual serverless framework making use of Wasm, it would have to take ownership of the Wasm module and do the precompilation itself, in order to trust the code.
 
 \subsubsection{Execution}
-\inl{run} executes the module associated with the given container id and with the parameters as input. In line with OpenWhisk, the parameters are a JSON object, which allows for a high degree of flexibility for the function input. Across all runtimes, this function looks up the previously stored module with the container id, creates a WASI context with the associated capabilities and executes the module. If an error occurs during the Wasm runtime setup, the outer \inl{Result} contains an \inl{anyhow::Error}, a generic, application-level error type. Since the Wasm module itself can also either succeed or fail, another \inl{Result} is nested inside, where both success and failure are represented by JSON objects.
+
+All runtimes implemented support the WebAssembly System Interface (WASI). Recall that WASI follows a capability-based security model, which allows for fine-grained control over what the module has access to. Hence, building a WASI context means setting up those capabilities, like forwarding \inl{stdin} or receiving from \inl{stdout}, setting environment variables or \inl{argv}. By default, the module also has access to WASI APIs like \inl{random_get} for high-quality randomness or \inl{clock_time_get} to attain values from various clocks. WASI also controls on a per file descriptor basis, what directories the module has access to. Specifically, the modules needs a preopened file descriptor in order to access files. The Wasm runtimes therefore open the files and pass them to the module. However, that information is not present in OpenWhisk since Docker doesn't require it, so we need a way for users to specify these capabilities.
+
+OpenWhisk actions can have optional annotations attached to them, which are simple key-value pairs. We can use those to let users specify capabilities. For instance:
+
+\begin{minted}{sh}
+wsk action create cache cache.wasm --annotation dir "/tmp/cache"
+\end{minted}
+
+Here a new action named \inl{cache} is created from a file \inl{cache.wasm} with the \inl{wsk} cli tool. A key-value pair is attached with \inl{dir=/tmp/cache}. With some minimal code changes to OpenWhisk's container abstraction, these annotations are then passed to the executor during \inl{initialize}. On the executor side, it is passed to each runtime which can then act on that information. It would be easily possible for a service provider to implement policies on top of it. Access could only be granted to the \inl{/tmp} directory in general; or a default cache directory \inl{/tmp/<container_id>} could be created for each container, where information can be cached but only \emph{that} container has access to it. As WASI is currently under heavy development and doesn't, for example, specify any network-related interfaces, the amount of capabilities is limited. Our prototype implements directory access and our self-provided HTTP GET request. The latter is relevant to implement a network I/O-bound function for our evaluation in chapter \ref{chapter:evaluation}.
+
+
+\inl{run} executes the module associated with the given container id and with the given parameters as input. As required by OpenWhisk, the parameter is a JSON object. The WebAssembly minimum-viable product (MVP), only supports integer data types natively. Higher-level data types often differ in their implementation details between languages, so a universal target format like Wasm cannot decide for one of them, without shutting certain languages out or making it harder for them to be used. Making Wasm modules compiled from different source languages interoperable is an ongoing process -- with WebAssembly interface types\footnote{\url{https://hacks.mozilla.org/2019/08/webassembly-interface-types/}}. The \inl{wasm-bindgen} Rust library already makes this process easy for JavaScript-WebAssembly interoperability. Unfortunately, it does not work with any of our runtimes. Even if both our runtime and the module is written in Rust originally, passing a pointer is not possible because WebAssembly is sandboxed and could not access the pointee. To pass a complex type like a JSON object to the module, we require that it uses a wrapper. Internally, the wrapper allocates a global buffer of bytes. It exports three functions to work with this buffer, most notably one that returns a pointer. When executing the module, the runtime serializes the JSON object as bytes and allocates enough space in the buffer to store them. It then acquires the pointer, which is relative to the module's memory's base pointer, offsets it appropriately and writes the JSON bytes into the buffer. Since the module doesn't know the number of bytes written, the runtime passes that as its argument. On the other side, the module reads the given number of bytes from the buffer and calls the user-provided handler function. Reading the return value of the action uses the same process. Conveniently, the user only has to implement a function that takes a JSON object and returns one in the success case; an error otherwise. Thus, this crude method of passing parameters can be completely hidden from action developers.
+
+The creation of the Wasi context as well as the actual execution is slightly different for each runtime.
+
+\begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
+
+    \item[Wasmtime] The \inl{wasmtime} runtime as of version \inl{0.23} uses \inl{cap-std}, a capability based implementation with a similar API as the Rust standard libary. We can construct its \inl{Dir} type and use it while building a \inl{WasiCtxBuilder}, ultimately yielding a \inl{WasiCtx}. The context is \emph{linked} using the runtime's \inl{Linker}, which is similar to an operating system's dynamic linker. It resolves the imports that the module needs and instantiates it with them.
+    To execute, we create a \inl{Store} per request, thus per \inl{run} invocation. This is because a \inl{Store} is neither thread-safe nor meant to be long-lived, according to the documentation. The \inl{Store} is used as a collection of the instances and the host-defined items, according to the documentation.
+
+    \item[Wasmer] In \inl{wasmer} 
+
+    \item[Wamr] \inl{wamr} is 
+
+\end{description}
+
+So in summary and across all runtimes, this function looks up the previously stored module with the container id, creates a WASI context with the associated capabilities and executes the module. If an error occurs during the Wasm runtime setup, the outer \inl{Result} contains an \inl{anyhow::Error}, a generic, application-level error type. Since the Wasm module itself can also either succeed or fail, another \inl{Result} is nested inside, where both success and failure are represented by JSON objects.
+
+In what task or thread the module is executed, will be discussed shortly.
+
+\subsubsection{Parameter Passing}
 
 \subsubsection{Cleanup}
 Finally, the \inl{destroy} function removes the container, which simply means freeing the memory taken up by the module.
