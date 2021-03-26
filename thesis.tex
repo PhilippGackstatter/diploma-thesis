@@ -18,12 +18,21 @@
 \usepackage{minted}
 \usepackage{nag}       % Issues warnings when best practices in writing LaTeX documents are violated.
 \usepackage{todonotes} % Provides tooltip-like todo notes.
+\usepackage{titlesec}
 % Maybe remove this line for final digital export
 \usepackage[hidelinks]{hyperref}
 \usepackage{hyperref}  % Enables cross linking in the electronic document version. This package has to be included second to last.
 \usepackage[acronym,toc]{glossaries} % Enables the generation of glossaries and lists fo acronyms. This package has to be included last.
 
 \addbibresource{references.bib}
+
+\definecolor{BrightPurple}{HTML}{8c14ee}
+\titleformat{\section}
+    {\Large\normalfont\bfseries}  % Large, bold, sans serif font for section
+    {}                          % No format applied to whole title
+    {0pt}                       % No separation between label and title
+    {\thesection~·~}            % Start with section number
+    [{\color{BrightPurple}\hrule}]      % Underline with colored ruler
 
 % Define convenience functions to use the author name and the thesis title in the PDF document properties.
 \newcommand{\authorname}{Philipp Gackstatter} % The author name without titles.
