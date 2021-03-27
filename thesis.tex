@@ -19,6 +19,8 @@
 \usepackage{nag}       % Issues warnings when best practices in writing LaTeX documents are violated.
 \usepackage{todonotes} % Provides tooltip-like todo notes.
 \usepackage{titlesec}
+% For line breaks in \texttt
+% \usepackage[htt]{hyphenat}
 % Maybe remove this line for final digital export
 \usepackage[hidelinks]{hyperref}
 \usepackage{hyperref}  % Enables cross linking in the electronic document version. This package has to be included second to last.
@@ -34,6 +36,13 @@
 
 % Hyphenation
 \hyphenation{Web-As-sem-bly}
+
+\definecolor{friendlybg}{HTML}{f0f0f0}
+\newcommand{\inl}[1]{\colorbox{friendlybg}{\texttt{#1}}}
+
+% Quotes
+\newcommand{\quot}[1]{\foreignquote{german}{#1}}
+
 \definecolor{BrightPurple}{HTML}{8c14ee}
 \titleformat{\section}
     {\Large\normalfont\bfseries}  % Large, bold, sans serif font for section
