@@ -119,8 +119,6 @@ In figure \ref{fig:wasm-openwhisk-action-invocation-flow} we have sketched the h
 
 In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the Wasm executor. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server, which would both increase the module's size and its runtime overhead. The disadvantage is the single point of failure. That is offset by the bigger picture of OpenWhisk, where in a truly resilient deployment, we already have multiple Invokers. A failing Wasm executor would let the entire Invoker unit fail, but others could potentially take over in that scenario. That also presupposes, that the Wasm executor can handle a potentially large amount of requests.
 
-% Need to decide whether OW handles containers life cycle or if executor takes that responsibility
-
 The executor also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. In order to enable execution on all kinds of platforms, including edge devices, another requirement for a useful Wasm executor is its ability to run on different instruction set architectures.
 
 In summary, the requirements for our executor are
@@ -144,7 +142,7 @@ The Wasm executor will be written from scratch in the Rust programming language.
   \item It uses LLVM in the backend so it can be compiled for almost any architecture.
   \item It allows for \quot{fearless concurrency}, since the compiler can detect data races at compile time.
   \item It has good support for asynchronous I/O, so it should be able to efficiently handle a large amount of concurrent requests.
-  \item 3 out of the 4 Wasm executors investigated here are written in Rust, so embedding them is efficient and well documented.
+  \item Two out of the three Wasm runtimes implemented here are written in Rust, so embedding them is efficient and well documented.
 \end{itemize}
 
 \begin{listing}[ht]
@@ -192,18 +190,18 @@ Both \inl{wasmer} and \inl{wamr} support AoT compilation. \inl{wasmer} in partic
 
 Even though the cold start of our executor is well-optimized now, cold starting for every single invocation would still be too expensive for sequential invocations. Furthermore, in order to implement and adhere to OpenWhisk's design, we already need to store the module between \inl{init} and \inl{run}. Thus, we can take advantage of that design and keep the module around for some threshold time, before it is evicted. This is how OpenWhisk works with Docker containers today. After a cold start, OpenWhisk pauses the container and unpauses it if a matching request comes in, in which case the action invocation experiences a warm start. After the threshold -- which defaults to 10 minutes -- OpenWhisk calls the \inl{destroy} function on the container, removing it entirely.
 
-One inefficiency of our design is that our executor store modules per container, rather than just once. If OpenWhisk decides to create two containers \inl{A} and \inl{B}, both containing the same module \inl{M}, then \inl{M} will take up storage twice. One reason for this design is the eviction process. Internally, the executor uses a thread-safe HashMap to store the modules and let many tasks or threads read from it simultaneously. A store-modules-once approach would require an atomic reference counting mechanism and additional locking to act on it, i.e. testing whether the reference count is 0 is atomic, but checking \emph{and} removing it is a critical section. Instead of introducing an additional lock per module and the additional synchronization overhead that comes with it, we trade memory for speed and store the module per container. Thus, removing a container is a trivial and fast remove operation on the HashMap. This design is also less of an issue in light of OpenWhisk's per-action concurrency limit. This limit states how many concurrent invocations a container should handle at most. If we increase this value beyond its default of one, then OpenWhisk will send invocation requests for the same action to the same container, up to that limit, without duplicating the module in the executor's memory.
+One inefficiency of our design is that our executor store modules per container, rather than just once. If OpenWhisk decides to create two containers \inl{A} and \inl{B}, both containing the same module \inl{M}, then \inl{M} will take up storage twice. One reason for this design is the eviction process. Internally, the executor uses a thread-safe HashMap to store the modules and let many tasks or threads read from it simultaneously. A store-modules-once approach would require an atomic reference counting mechanism and additional locking to act on it, i.e. testing whether the reference count is 0 is atomic, but checking \emph{and} removing it is a critical section. Instead of introducing an additional lock per module and the additional synchronization overhead that comes with it, we trade memory for speed and store the module per container. Thus, removing a container is a trivial and fast remove operation on the HashMap. This design is also less of an issue in light of OpenWhisk's per-action concurrency limit. This limit states how many concurrent invocations a container should handle at most. If we increase this value beyond its default of one, then OpenWhisk will send invocation requests for the same action to the same container, up to that limit, without duplicating the module in the executor's memory. In particular, figure \ref{fig:openwhisk-concurrency-limit-greater-one} shows how a module can be reused in the same container -- skipping the cold start entirely.
 
-The result of keeping modules in the executor's memory, is that they are already deserialized and a new instance can be instantiated from it immediately. An instance is the runtime's representation of a callable Wasm module. If a module is the equivalent of a Docker image, then the instance is analogous to the running container. Note that, unlike Docker-based OpenWhisk we do not keep instances in-memory (container), but only the modules (images). The cost of instantiating an instance is negligible. On our test machine it took, on average, 340 microseconds to setup a \inl{wasmtime} instance and the parts needed for execution. This represents the overhead on every warm invocation. Moreover, two instances can execute concurrently, even if the module itself is not thread-safe, for instance when reentrant execution would be unsafe. Finally, implemented this way, it would also be safe to execute two requests from different users, since instances are isolated from each other. They operate on their own memory space and have their own WASI environment. Thus, caching modules rather than instances is a good trade-off.
+\begin{figure}
+    \includegraphics{figures/OpenWhiskConcurrencyLimitGreaterOne.pdf}
+    \caption{An example of a container's life cycle when OpenWhisk's concurrency limit is set to a value greater one. Note that a container is only represented in-memory by its module and instances, which is why there is no explicit \quot{container} label in the figure. The container is initialized with a module by OpenWhisk's call to \inl{/init}. Every \inl{/run} request to the same container id spawns a new instance of a WebAssembly module. In particular, two concurrent requests to \inl{/run} can be executed concurrently by the container where the instances are instantiated from the same module. How many requests can be handled in this manner is determined by OpenWhisk's concurrency limit. The instances are the actual \quot{containers} here, since they are the ones who are isolated from each other as well as the host. They are short-lived and never reused to guarntee that isolation, i.e. there is a one-to-one relationship between \inl{/run} requests and instances. The Wasm module will stay in memory until OpenWhisk's explicit call to \inl{/destroy}, which occurs after a container has been idle for some threshold time.}
+    \label{fig:openwhisk-concurrency-limit-greater-one}
+\end{figure}
+
+
+The result of keeping modules in the executor's memory, is that they are already deserialized and a new instance can be instantiated from it immediately. An instance is the runtime's representation of a callable Wasm module. If a module is the equivalent of a Docker image, then the instance is analogous to the running container. Note that, unlike Docker-based OpenWhisk, we do not keep instances in-memory (containers), but only the modules (images). The cost of instantiating an instance is negligible. On our test machine it took, on average, 340 microseconds to setup a \inl{wasmtime} instance and the parts needed for execution. This represents the overhead on every warm invocation. Moreover, two instances can execute concurrently, even if the module itself is not thread-safe, for instance when reentrant execution would be unsafe. Finally, implemented this way, it would also be safe to execute two requests from different users, since instances are isolated from each other. They operate on their own memory space and have their own WASI environment. Thus, caching modules rather than instances is a good trade-off.
 
 \subsection{The WasmRuntime abstraction}
-
-% Main function, async-std, code-snippet, concurrency, state sharing
-% Capabilities
-% Describe rough idea of what the architecture is
-% - Main function, what init and run do
-% - The WasmRuntime abstraction
-
 
 \begin{listing}[ht]
 \begin{minted}{rust}
@@ -265,7 +263,7 @@ The creation of the Wasi context as well as the actual execution is slightly dif
 
 \begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
 
-    \item[Wasmtime] The \inl{wasmtime} runtime as of version \inl{0.23} uses \inl{cap-std}, a capability based implementation with a similar API as the Rust standard libary. We can construct its \inl{Dir} type and use it while building a \inl{WasiCtxBuilder}, ultimately yielding a \inl{WasiCtx}. The context is \emph{linked} with the module using the runtime's \inl{Linker}, which is similar to an operating system's dynamic linker. It resolves the imports that the module needs and instantiates it with them.
+    \item[Wasmtime] The \inl{wasmtime} runtime, as of version \inl{0.23}, uses \inl{cap-std}, a capability based implementation with a similar API as the Rust standard libary. We can construct its \inl{Dir} type and use it while building a \inl{WasiCtxBuilder}, ultimately yielding a \inl{WasiCtx}. The context is \emph{linked} with the module using the runtime's \inl{Linker}, which is similar to an operating system's dynamic linker. It resolves the imports that the module needs and instantiates it with them.
     To execute, we create a \inl{Store} per request, thus per \inl{run} invocation. This is because a \inl{Store} is neither thread-safe nor meant to be long-lived, according to the documentation. The \inl{Store} is used as a collection of the instances and the host-defined items, according to the documentation.
 
     \item[Wasmer] In \inl{wasmer} we build up a \inl{WasiEnv} with a very similar API as \inl{wasmtime}'s, including directory access. The module and environment are combined into an \inl{ImportObject} from which an \inl{Instance} is instantiated.
@@ -325,12 +323,3 @@ Both models seem to have a workload better suited to them. However, in a real-wo
 \end{figure}
 
 In figure \ref{fig:default_vs_thread_pool_mixed} a mixed scenario is run, where 16 compute-bound and 16 I/O-bound requests are executed simultaneously. In the default model, the compute-bound requests finish in about one third of the time they take under the thread pool model. This is again due to more requests being processed concurrently in the latter model. This is also why the standard deviation is slightly higher in that model. For I/O-bound workloads, there is a slight advantage for the default model. However, in the context of the plot on the right side, the thread pool model is able to handle more requests per second in general, but specifically excels at the I/O-bound ones. There is an inherent trade-off between serving a request as soon as possible, and the time it takes to finish serving it. It depends on the expected workload, which model should be used.
-
-% TODO: Find out whether typical serverless workload is compute-bound or I/O-bound
-
-\subsection{Optimizations}
-
-\begin{itemize}
-    \item Caching of modules. What can be created per-thread different for each runtime (wasmtime, wasmer, ...)
-    \item How important is the scale-to-zero principle vs. performance?
-\end{itemize}
