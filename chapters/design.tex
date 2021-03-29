@@ -132,8 +132,6 @@ In summary, the requirements for our executor are
 \end{enumerate}
 
 
-
-
 \section{Executor implementation}
 
 
@@ -153,15 +151,22 @@ The Wasm executor will be written from scratch in the Rust programming language.
 \begin{minted}{rust}
 #[async_std::main]
 async fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "wasmtime_rt")]
     let runtime = ow_wasmtime::Wasmtime::default();
 
-    let mut app = tide::with_state(runtime);
+    #[cfg(feature = "wasmer_rt")]
+    let runtime = ow_wasmer::Wasmer::default();
 
-    app.at("/:container_id/init").post(core::init);
-    app.at("/:container_id/run").post(core::run);
-    app.at("/:container_id/destroy").post(core::destroy);
+    #[cfg(feature = "wamr_rt")]
+    let runtime = ow_wamr::Wamr::default();
 
-    app.listen("127.0.0.1:9000").await.unwrap();
+    let mut executor = tide::with_state(runtime);
+
+    executor.at("/:container_id/init").post(core::init);
+    executor.at("/:container_id/run").post(core::run);
+    executor.at("/:container_id/destroy").post(core::destroy);
+
+    executor.listen("127.0.0.1:9000").await.unwrap();
 
     Ok(())
 }
@@ -170,9 +175,9 @@ async fn main() -> anyhow::Result<()> {
 \label{listing:wasm-executor-main}
 \end{listing}
 
-The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library. The main function in listing \ref{listing:wasm-executor-main} suits itself well to describe the architecture. The \inl{\#[async_std::main]} macro starts this program in an asynchronous runtime, which enables us to use \inl{async} functions and \inl{await} them. The async runtime allows multiple concurrent requests to one of the endpoints, without us having to spawn threads explicitly. Although, we will come back to this later when it becomes necessary to spawn workloads onto dedicated threads -- and go into more detail on \inl{async-std}.
+The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library. The main function in listing \ref{listing:wasm-executor-main} suits itself well to describe the architecture. The \inl{\#[async\_std::main]} macro starts this program in an asynchronous runtime, which enables us to use \inl{async} functions and \inl{await} them. The async runtime allows multiple concurrent requests to one of the endpoints, without us having to spawn threads explicitly. Although, we will come back to this later when it becomes necessary to spawn workloads onto dedicated threads -- and go into more detail on \inl{async-std}.
 
-We can instantiate one of our three runtimes -- our wrapper around \inl{wasmtime} in this example -- and use it as state, which is shared among requests. To start a container, the \inl{WasmContainer} in OpenWhisk generates a new universally unique identifier (uuid), without having to communicate with the Wasm executor at all. This is possible because there is no setup for each Wasm container, that needs to happen ahead-of-time, like network namespace creation for Docker containers. The actual work happens in the endpoints, which are parameterized by the container id. \inl{/init} is called once by OpenWhisk per container, to initialize the container with the module's code. Although different for each runtime; in general, this endpoint will do any work that can be frontloaded and which takes a significant amount of time. \inl{/run} is invoked potentially many times, so any work that is not frontloaded would multiply there. Of course, \inl{/init} is the potential culprit for the cold start latency, so our focus is on reducing even the amount work this endpoint needs to handle. We describe the optimizations to that end, later in this chapter. Once OpenWhisk decides to destroy the container, it does so through \inl{/destroy}.
+We can instantiate one of our three runtimes of which only one is compiled in based on the feature we pass to the compiler. It is used as state, which is shared among requests. To start a container, the \inl{WasmContainer} in OpenWhisk generates a new universally unique identifier (uuid), without having to communicate with the Wasm executor at all. This is possible because there is no setup for each Wasm container, that needs to happen ahead-of-time, like network namespace creation for Docker containers. The actual work happens in the endpoints, which are parameterized by the container id. \inl{/init} is called once by OpenWhisk per container, to initialize the container with the module's code. Although different for each runtime; in general, this endpoint will do any work that can be frontloaded and which takes a significant amount of time. \inl{/run} is invoked potentially many times, so any work that is not frontloaded would multiply there. Of course, \inl{/init} is the potential culprit for the cold start latency, so our focus is on reducing even the amount work this endpoint needs to handle. We describe the optimizations to that end, later in this chapter. Once OpenWhisk decides to destroy the container, it does so through \inl{/destroy}.
 Finally, we give \inl{tide} a function pointer for each endpoint and listen on a local address.
 
 \subsection{Fast cold starts}
@@ -235,7 +240,7 @@ The executor decodes the base64 string given by OpenWhisk and unzips it, before 
 
     \item[Wasmer] In \inl{wasmer} we store both an \inl{Engine} and a \inl{Store} globally, since a \inl{Module} requires both for instantiation. We will see whether and how that affects memory consumption in chapter \ref{chapter:evaluation}. Like in \inl{wasmtime}, the \inl{Module} is thread-safe.
 
-    \item[Wamr] \inl{wamr} is originally written in C, and we use \inl{wamr_sys} \footnote{\url{https://crates.io/crates/wamr_sys}} bindings to embed it in Rust. Contrary to the other runtimes, a module in \inl{wamr} is not thread-safe. Thus, only the serialized bytes representing the module are stored in the HashMap. It follows that the deserialization happens in every \inl{run} call instead, which is slightly more expensive.
+    \item[Wamr] \inl{wamr} is originally written in C, and we use \inl{wamr\_sys} \footnote{\url{https://crates.io/crates/wamr\_sys}} bindings to embed it in Rust. Contrary to the other runtimes, a module in \inl{wamr} is not thread-safe. Thus, only the serialized bytes representing the module are stored in the HashMap. It follows that the deserialization happens in every \inl{run} call instead, which is slightly more expensive.
 
 \end{description}
 
@@ -243,7 +248,7 @@ Both \inl{wasmtime} and \inl{wasmer} underline the importance of the validity of
 
 \subsubsection{Execution}
 
-All runtimes implemented support the WebAssembly System Interface (WASI). Recall that WASI follows a capability-based security model, which allows for fine-grained control over what the module has access to. Hence, building a WASI context means setting up those capabilities, like forwarding \inl{stdin} or receiving from \inl{stdout}, setting environment variables or \inl{argv}. By default, the module also has access to WASI APIs like \inl{random_get} for high-quality randomness or \inl{clock_time_get} to attain values from various clocks. WASI also controls on a per file descriptor basis, what directories the module has access to. Specifically, the modules needs a preopened file descriptor in order to access files. The Wasm runtimes therefore open the files and pass them to the module. However, that information is not present in OpenWhisk since Docker doesn't require it, so we need a way for users to specify these capabilities.
+All runtimes implemented support the WebAssembly System Interface (WASI). Recall that WASI follows a capability-based security model, which allows for fine-grained control over what the module has access to. Hence, building a WASI context means setting up those capabilities, like forwarding \inl{stdin} or receiving from \inl{stdout}, setting environment variables or \inl{argv}. By default, the module also has access to WASI APIs like \inl{random\_get} for high-quality randomness or \inl{clock\_time\_get} to attain values from various clocks. WASI also controls on a per file descriptor basis, what directories the module has access to. Specifically, the modules needs a preopened file descriptor in order to access files. The Wasm runtimes therefore open the files and pass them to the module. However, that information is not present in OpenWhisk since Docker doesn't require it, so we need a way for users to specify these capabilities.
 
 OpenWhisk actions can have optional annotations attached to them, which are simple key-value pairs. We can use those to let users specify capabilities. For instance:
 
@@ -251,7 +256,7 @@ OpenWhisk actions can have optional annotations attached to them, which are simp
 wsk action create cache cache.wasm --annotation dir "/tmp/cache"
 \end{minted}
 
-Here a new action named \inl{cache} is created from a file \inl{cache.wasm} with the \inl{wsk} cli tool. A key-value pair is attached with \inl{dir=/tmp/cache}. With some minimal code changes to OpenWhisk's container abstraction, these annotations are then passed to the executor during \inl{initialize}. On the executor side, it is passed to each runtime which can then act on that information. It would be easily possible for a service provider to implement policies on top of it. Access could only be granted to the \inl{/tmp} directory in general; or a default cache directory \inl{/tmp/<container_id>} could be created for each container, where information can be cached but only \emph{that} container has access to it. As WASI is currently under heavy development and doesn't, for example, specify any network-related interfaces, the amount of capabilities is limited. Our prototype implements directory access and our self-provided HTTP GET request. The latter is relevant to implement a network I/O-bound function for our evaluation in chapter \ref{chapter:evaluation}.
+Here a new action named \inl{cache} is created from a file \inl{cache.wasm} with the \inl{wsk} cli tool. A key-value pair is attached with \inl{dir=/tmp/cache}. With some minimal code changes to OpenWhisk's container abstraction, these annotations are then passed to the executor during \inl{initialize}. On the executor side, it is passed to each runtime which can then act on that information. It would be easily possible for a service provider to implement policies on top of it. Access could only be granted to the \inl{/tmp} directory in general; or a default cache directory \inl{/tmp/<container\_id>} could be created for each container, where information can be cached but only \emph{that} container has access to it. As WASI is currently under heavy development and doesn't, for example, specify any network-related interfaces, the amount of capabilities is limited. Our prototype implements directory access and our self-provided HTTP GET request. The latter is relevant to implement a network I/O-bound function for our evaluation in chapter \ref{chapter:evaluation}.
 
 
 \inl{run} executes the module associated with the given container id and with the given parameters as input. As required by OpenWhisk, the parameter is a JSON object. The WebAssembly minimum-viable product (MVP), only supports integer data types natively. Higher-level data types often differ in their implementation details between languages, so a universal target format like Wasm cannot decide for one of them, without shutting certain languages out or making it harder for them to be used. Making Wasm modules compiled from different source languages interoperable is an ongoing process -- with WebAssembly interface types\footnote{\url{https://hacks.mozilla.org/2019/08/webassembly-interface-types/}}. The \inl{wasm-bindgen} Rust library already makes this process easy for JavaScript-WebAssembly interoperability. Unfortunately, it does not work with any of our runtimes. Even if both our runtime and the module is written in Rust originally, passing a pointer is not possible because WebAssembly is sandboxed and could not access the pointee. To pass a complex type like a JSON object to the module, we require that it uses a wrapper. Internally, the wrapper allocates a global buffer of bytes. It exports three functions to work with this buffer, most notably one that returns a pointer. When executing the module, the runtime serializes the JSON object as bytes and allocates enough space in the buffer to store them. It then acquires the pointer, which is relative to the module's memory's base pointer, offsets it appropriately and writes the JSON bytes into the buffer. Since the module doesn't know the number of bytes written, the runtime passes that as its argument. On the other side, the module reads the given number of bytes from the buffer and calls the user-provided handler function. Reading the return value of the action uses the same process. Conveniently, the user only has to implement a function that takes a JSON object and returns one in the success case; an error otherwise. Thus, this crude method of passing parameters can be completely hidden from action developers.
@@ -260,32 +265,23 @@ The creation of the Wasi context as well as the actual execution is slightly dif
 
 \begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
 
-    \item[Wasmtime] The \inl{wasmtime} runtime as of version \inl{0.23} uses \inl{cap-std}, a capability based implementation with a similar API as the Rust standard libary. We can construct its \inl{Dir} type and use it while building a \inl{WasiCtxBuilder}, ultimately yielding a \inl{WasiCtx}. The context is \emph{linked} using the runtime's \inl{Linker}, which is similar to an operating system's dynamic linker. It resolves the imports that the module needs and instantiates it with them.
+    \item[Wasmtime] The \inl{wasmtime} runtime as of version \inl{0.23} uses \inl{cap-std}, a capability based implementation with a similar API as the Rust standard libary. We can construct its \inl{Dir} type and use it while building a \inl{WasiCtxBuilder}, ultimately yielding a \inl{WasiCtx}. The context is \emph{linked} with the module using the runtime's \inl{Linker}, which is similar to an operating system's dynamic linker. It resolves the imports that the module needs and instantiates it with them.
     To execute, we create a \inl{Store} per request, thus per \inl{run} invocation. This is because a \inl{Store} is neither thread-safe nor meant to be long-lived, according to the documentation. The \inl{Store} is used as a collection of the instances and the host-defined items, according to the documentation.
 
-    \item[Wasmer] In \inl{wasmer} 
+    \item[Wasmer] In \inl{wasmer} we build up a \inl{WasiEnv} with a very similar API as \inl{wasmtime}'s, including directory access. The module and environment are combined into an \inl{ImportObject} from which an \inl{Instance} is instantiated.
 
-    \item[Wamr] \inl{wamr} is 
+    \item[Wamr] \inl{wamr}'s API is slightly lower-level and less ergonomic compared to the other runtimes due to it being a C-API rather than an idiomatic Rust one.
+    Two functions need to be called globally, for the runtime to be instantiated and torn down, \inl{wasm\_runtime\_init} and \inl{wasm\_runtime\_destroy}, respectively.
+    Our implementation requires each runtime state to implement \inl{Clone}, a trait indicating that an object can be duplicated. A common pattern in Rust (also used by \inl{wasmtime} and \inl{wasmer}) is to implement the clone operation to produce a shallow copy. Internally, these objects typically use Rust's atomically reference-counted smart pointer (\inl{Arc}) to share object's across threads, safely. This makes it cheap to share the runtimes object across different threads while having access to the same underlying data. Thus, on each request a clone of the runtime is created and destroyed (dropped) at the end. Because of that we cannot call \inl{wasm\_runtime\_destroy} in the runtime's \inl{Drop} implementation. Instead, we use another internal Arc, which is instantiated with an object that calls the initialization function when it is created, and destroys the context when it is being dropped. Because the \inl{Arc} will live as long as the runtime and only calls the contained object's \inl{drop} function when all other references have gone away, this implements our requirements perfectly.
 
 \end{description}
 
-So in summary and across all runtimes, this function looks up the previously stored module with the container id, creates a WASI context with the associated capabilities and executes the module. If an error occurs during the Wasm runtime setup, the outer \inl{Result} contains an \inl{anyhow::Error}, a generic, application-level error type. Since the Wasm module itself can also either succeed or fail, another \inl{Result} is nested inside, where both success and failure are represented by JSON objects.
+So in summary -- across all runtimes -- \inl{run} looks up the previously stored module with the container id, creates a WASI context with the associated capabilities, passes the parameters and executes the module's default function. If an error occurs during the Wasm runtime setup, the outer \inl{Result} contains an \inl{anyhow::Error}, a generic, application-level error type. Since the Wasm module itself can also either succeed or fail, another \inl{Result} is nested inside, where both success and failure are represented by JSON objects.
 
 In what task or thread the module is executed, will be discussed shortly.
 
-\subsubsection{Parameter Passing}
-
 \subsubsection{Cleanup}
-Finally, the \inl{destroy} function removes the container, which simply means freeing the memory taken up by the module.
-
-% The run function returns Rust's \inl{Result} type. It is an enum, where its \inl{Ok()} variant represents success, and its \inl{Err()} variant represents an error.
-
-To our \inl{/init} endpoint, OpenWhisk sends ...
-
-
-
-\inl{tide} will inject this state into each request, so it must be thread-safe.
-
+Finally, the \inl{destroy} function removes the container, which simply means freeing the memory taken up by the module. This is fast and thread-safe, since each container manages its own Wasm module. Once OpenWhisk has decided to destroy the container, it will synchronize internally to not call \inl{run} on it again.
 
 \subsection{Enabling concurrency}
 
@@ -293,7 +289,7 @@ The executor consists of a web server that can take requests from the invoker as
 
 
 Rust's async model works with \inl{Futures} -- also known as Promises in JavaScript -- which represent values that have not yet been computed. Contrary to \inl{Promises} however, Rust's \inl{Futures} are lazy: They do nothing unless actively polled. This task falls to \inl{async} runtimes, of which \inl{async-std} provides one. In \inl{async-std} the unit of execution is a \inl{Task}, which is similar to a \inl{Thread}, except it is driven to completion by the user space runtime instead of the OS. Many of those tasks are executed on the same thread, and by default, a \inl{Thread} per logical CPU core is spawned. Thus we have $M \cdot N$ tasks in total, where $M$ is the number of tasks per thread and $N$ the number of logical CPU cores.
-From that, a second distinction is implied. A \inl{Task} should not do a blocking or long-running operation, like reading from a file via the standard library's \inl{std::fs::read_to_string}. Instead, it should use the \inl{async} version of that method, from \inl{async-std}, which does not block the thread. Otherwise, all other $M - 1$ tasks, which are executed on the same thread, will also be blocked, even though they may be able to make progress. Note that, we could still process $N$ requests concurrently, even if tasks block, but that doesn't scale well enough. This is why these kinds of async functions are also called cooperative routines (coroutines). When they need to wait for the OS to finish a task, they \emph{yield} to another routine, which can then continue actual work.
+From that, a second distinction is implied. A \inl{Task} should not do a blocking or long-running operation, like reading from a file via the standard library's \inl{std::fs::read\_to\_string}. Instead, it should use the \inl{async} version of that method, from \inl{async-std}, which does not block the thread. Otherwise, all other $M - 1$ tasks, which are executed on the same thread, will also be blocked, even though they may be able to make progress. Note that, we could still process $N$ requests concurrently, even if tasks block, but that doesn't scale well enough. This is why these kinds of async functions are also called cooperative routines (coroutines). When they need to wait for the OS to finish a task, they \emph{yield} to another routine, which can then continue actual work.
 
 That becomes relevant for us, when we execute WebAssembly modules. Taking the module, setting up the Wasm runtime and executing it, is a long-running computation -- and one that could block as well. This would in turn block the thread we are currently running on, which means, only $N$ Wasm modules can be executed concurrently. This is not an issue for computationally-intensive workloads, where no more work can be done concurrently, than the CPU has logical cores. However, for I/O-bound workloads, such as requests over the network, this can quickly become a bottleneck. Since one of the appealing offerings of serverless frameworks is their elasticity, we clearly need a way to handle many more requests, even if they block.
 To let other coroutines on the same thread make progress, while one executes the module, we can push the entire execution onto a thread pool. The coroutine then has the simple job to asynchronously wait for that execution to finish and collect the result. That allows the other coroutines to process more requests in the meantime.
