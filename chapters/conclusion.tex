@@ -9,9 +9,12 @@ Other attempts for speeding-up serverless have been successful, but didn't catch
 
 \citeauthor{Shahrad2020} have found that, on average, 50\% of functions execute for more than 1s, that 80\% of functions execute for more than 100ms, and 9X\% of functions execute for more than 10ms (or similar, perhaps need to do the actual calculations on the data set). Thus our cold start latencies are not on the same order of magnitude as 9X\% of function execution times, but faster.
 
+What requests per second can a raspberry handle, how much for a EC2 instance (or similar)? Can we scale up horizontally, vertically?
+
 \section{Open challenges}
 
 - multi threading not in Wasm
 - limiting CPU time (research if possible)
 - limiting memory
 - spectre mitigation
+- currently instances will be removed every time, i.e. an instance needs to load something from cache every time. A peristent instance could hold it in memory and return it even faster. Not technically impossibled (just a bit more complex), but currently unimplemented.
