@@ -11,10 +11,26 @@ A substantial cold start latency has emerged as the paramount issue of the serve
 Serverless is employed by developers for bursty, unpredictable workloads, a pattern that is also common at the edge. In this scenario we see concurrent requests, which translate to concurrent cold starts. The more concurrent cold starts, the longer each one takes -- they slow each other down \cite{Cui2018}.
 Operators are forced to choose between saving cost and resources or enabling a high quality of service, in particular shorter response times. While this trade-off is inevitable to some degree, the cold start exacerbates it. If we can alleviate that latency, we have a win-win for the serverless user and the operator.
 
-Serverless enables the execution of \quot{polgylot tenant-provided code} \cite{Nastic2018}. A new runtime for serverless must keep up these principles of being programming language agnostic as well as being securely sandboxed, to allow for multi-tenancy. As described in the previous chapter, WebAssembly provides sandboxing and support for many languages, with support for more, likely to come. At the same time, it is a lighter-weight solution than virtualization with Docker containers. Thus, it seems like a good candidate to replace Docker containers in serverless platforms while alleviating the cold start latency. This is also why WebAssembly may fare better on low-power edge devices.
+Serverless enables the execution of \quot{polyglot tenant-provided code} \cite{Nastic2018}. A new runtime for serverless must keep up these principles of being programming language agnostic as well as being securely sandboxed, to allow for multi-tenancy. As described in the previous chapter, WebAssembly provides sandboxing and support for many languages, with support for more, likely to come. At the same time, it is a lighter-weight solution than virtualization with Docker containers. Thus, it seems like a good candidate to replace Docker containers in serverless platforms while alleviating the cold start latency. This is also why WebAssembly may fare better on low-power edge devices.
 
 \citeauthor{Mendki2020} compared WebAssembly and Docker container startup times, and found WebAssembly being 91\% faster than containers and used 75\% less memory \cite{Mendki2020}. \citeauthor{Hall2019} find their WebAssembly-based serverless platform fared 60\% better on average, than the Docker container solution, for their concurrent \quot{Multiple Client, Multiple Access} workload \cite{Hall2019}. These promising results are the basis for our work and validate the core idea of our approach.
 
+\section{Requirements}
+
+The executor will be built with these concerns and requirements in mind:
+
+\begin{enumerate}
+    \item Be easily integratable with an existing serverless framework.
+    \item Provide a cheap sandboxing mechanism to ensure multi-tenant capability and no adverse effects on the cold start latency.
+    \item Be as close to native speed as possible to be a viable alternative to existing container runtimes.
+    \item Run on devices with potentially different instruction set architectures (at least \inl{x86\_64} and \inl{ARM}).
+    \item Be able to efficiently handle a large amount of I/O concurrently, due to all requests being proxied through.
+    \item Be thread-safe.
+\end{enumerate}
+
+The requirements are discussed in more detail in the following sections. Finding a suitable serverless framework that we can modify and integrate with, will be the topic of the next section. In section \ref{chapter:background} we have seen how WebAssembly provides some of these requirements, such as sandboxing and relatively good execution speed. However, for our implementation we need concrete WebAssembly runtimes that provide these properties, so we will explore the options for WebAssembly runtimes and work out the differences. The choice for which language and libraries to implement our executor with, will be driven by how the Wasm runtime we choose can be integrated as well as having access to highly performant, concurrent I/O and good support for program correctness, including thread-safety.
+
+\section{Serverless frameworks}
 
 \section{WebAssembly runtimes}
 \label{section:wasm-runtimes}
@@ -69,7 +85,10 @@ A summary of the runtimes we looked at can be found in table \ref{table:wasm-run
 
 \section{WebAssembly in OpenWhisk}
 
-\subsection{Apache OpenWhisk}
+In this section we examine the possibilities for bringing WebAssembly support to OpenWhisk.
+In the rest of this section we will explore the available options and discuss them in the context of these requirements.
+
+\subsection{OpenWhisk's anatomy}
 
 In order to understand the requirements for our Wasm-flavored OpenWhisk, we need to understand the design of OpenWhisk itself first.
 
@@ -125,7 +144,7 @@ As a \inl{kubelet}, \inl{krustlet} runs on Kubernetes worker nodes and accepts w
 
 % Although, if containers are independent of the thing they were spawned from, that makes the system more resilient, thus the slightly higher cost of implementing the OW protocl + HTTP Server may be offset.
 
-While this approach has its merits, we believe that there would be higher friction for implementing it in OpenWhisk, than writing our own layer to Wasm runtimes. It provides more control over optimizing the cold-start latency as well as the execution performance, which are our main priorities.
+While this approach has its merits, we believe that there would be higher friction for implementing it in OpenWhisk, than writing our own layer to Wasm runtimes. It provides more control over optimizing the cold-start latency as well as the execution performance, which are part of the requirements we laid out.
 
 \subsection{An OpenWhisk-WebAssembly Executor}
 
@@ -144,15 +163,6 @@ In figure \ref{fig:wasm-openwhisk-action-invocation-flow} we have sketched the h
 In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the Wasm executor. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server, which would both increase the module's size and its runtime overhead. The disadvantage is the single point of failure. That is offset by the bigger picture of OpenWhisk, where in a truly resilient deployment, we already have multiple Invokers. A failing Wasm executor would let the entire Invoker unit fail, but others could potentially take over in that scenario. That also presupposes, that the Wasm executor can handle a potentially large amount of requests.
 
 The executor also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. In order to enable execution on all kinds of platforms, including edge devices, another requirement for a useful Wasm executor is its ability to run on different instruction set architectures.
-
-In summary, the requirements for our executor are
-
-\begin{enumerate}
-    \item It needs to be fast to alleviate the cold-start problem.
-    \item It needs to run on devices with potentially different instruction set architectures (at least x86\_64 and ARM).
-    \item It needs to be able to efficiently handle a large amount of I/O concurrently, due to all requests being proxied through.
-\end{enumerate}
-
 
 \section{Executor implementation}
 
