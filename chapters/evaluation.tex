@@ -5,20 +5,42 @@
 
 \subsection{Goals}
 
-\todo{RQs...}
+Recall our research questions.
+
+\begin{enumerate}
+    \item By how much can the cold-start problem be alleviated under the Wasm runtimes?
+  
+    \item How do the performance characteristics of the Wasm and container runtimes differ?
+  
+    \item What are the resource costs for keeping functions warm in both approaches?
+  
+    \item Which Webassembly runtime is most suitable for the use on heterogeneous edge devices?
+\end{enumerate}
+
+These questions guide our evaluation approach. First we describe the type of workload we run on OpenWhisk in both its base version and its modified Wasm version. Then we describe how our measurements are taken and how we evaluate each of the research questions. 
 
 \subsection{Workload Types}
 
-In section \ref{section:serverless_workload} we reviewed the literature, in order to characterize the serverless workload. This will inform the workloads that we'll run our evaluation under. The most important points were:
+To measure the performance of the serverless platform in a meaningful way, we reviewed the literature for use cases, where latency is critical; in turn, where the cold start time matters most. From these examples as well as characterizations of the workload types in section \ref{section:serverless_workload}, we infer an evaluation workload.
 
-\begin{itemize}
-    \item ...
-\end{itemize}
+\begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
+
+    \item[Vital Signs Analysis] \citeauthor{Nastic2017} introduce measuring a patient's vital signs as a latency-critical application. Decisions must be made quickly so it serves as an example, where a serverless platform on edge computers can provide lower latency than sending the data to the cloud \cite{Nastic2017}. Thus, part of the latency is reduced by physically moving the serverless platform closer to the edge device. However, the second important factor for latency is the platform's execution latency, i.e. its cold start time. Reducing the latter from multiple seconds down to a few milliseconds can make an important difference in that use case. The workload is data analytics, which can be classified as CPU-bound, because of the involved data preprocessing, analysis and perhaps even machine learning model training.
+    \item[Edge AI] \citeauthor{Rausch2019} describe a motivational use cases for AI at the serverless edge. The first is similar to the just-introduced example. A personal bio sensor measures blood sugar levels and sends it to an edge device, which refines a pre-trained model with that data and serves the model for inferencing \cite{Rausch2019}. The workload for this type of serverless function needs a significant amount of CPU-time for the machine learning tasks but also writes and reads parts of the model to and from disk. This workload cannot be unambiguously classified as either CPU- or file-I/O-bound, as it is rather both at once.
+    \item[APIs] According to \citeauthor{Eismann2021a} -- who conducted a manual analysis of serverless applications -- 28\% of their analysed applications were APIs \cite{Eismann2021a}. Even with today's cold start latency, developers are already using serverless for user-facing applications, where latency is rather important. If the latency could be reduced, even latency-critical APIs may be able to use serverless. A useful API is typically accessing or modifying state. Since serverless functions are stateless, they need to communicate with other services such as databases, event buses, logging services or they might even call other functions. This composition can be classified as network-I/O-bound, since the function spends most of its time waiting for the call to the external resource to complete.
+
+\end{description}
+
+We infer two workloads from these. Both CPU- and network-I/O-bound workloads are a primary type that ought to be handled well by a serverless platform. Some limitations apply due to WASI's immaturity or serverless idiosyncracies. In particular, to model a full machine learning example, we should access an already trained model and run predictions on it. However, due to the lack proper network accessibility in WASI we cannot retrieve it from an external service. Due to vanilla OpenWhisk using Docker containers, storing the model on disk would require granting each container access to the model's path on the host, which is not trivially done. We write the actions in Rust and compile it to the \inl{wasm32-wasi} and \inl{aarch64-unknown-linux-musl} target respectively, depending on whether we run a WebAssembly-based executor or the Docker-based one. This ensures that our results aren't distorted by two different implementations in separate languages. It is also one less parameter to take into account when reasoning about the results. In order to execute the native binary in OpenWhisk, we use its blackbox feature. It is implemented by its \inl{dockerskeleton} image, which lets us execute any action that adheres to a JSON-in, JSON-out protocol. We could also use the official Rust support by OpenWhisk, however, that takes a Rust source file and compiles it during the initialization phase, massively distorting the cold start latency. We think using the blackbox version makes for a fair comparison between both container runtime types.
+OpenWhisk makes its docker runtime images available for the \inl{x86\_64} architecture only, so we need to build this image for \inl{aarch64}\footnote{\url{https://hub.docker.com/r/pgackst/dockerskeleton}}, in order to execute on our Raspberry Pi. The concrete implementations of our evaluation actions are the following programs.
+
+\begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
+    \item[CPU-bound] For this workload, we repeatedly hash a bytestring in a loop using the \inl{blake3} algorithm. This is a convenient choice since its reference implementation is in Rust. Hashing is CPU-bound and free from system calls, so it is a good candiadate for this workload type. We choose the number of iterations so that the completion takes roughly 100ms on the native system, in order to have a non-trivial amount of work to be done for each invocation -- more than OpenWhisk needs for its scheduling internally.
+    \item[Network-I/O-bound] For this workload we make an HTTP request to a local server which always takes exactly 100ms to complete.
+\end{description}
+
 
 \subsection{Setup}
-
-
-The lack of existing research on whether serverless workloads are CPU- or I/O-bound, indicates that we need to examine the system for both types.
 
 We want to measure the cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. In the cold start case, OpenWhisk additionally attaches an \inl{initTime} annotation to the record, which is the cold start latency. The record also contains a \inl{duration} field which is the duration of the entire execution, including the potential cold start time. In figure \ref{fig:evaluation-time-measurement} we show an overview of the two measurements we calculate.
 
@@ -46,19 +68,57 @@ There are a few papers measuring serverless performance which also describe thei
 
 In the interest of reducing complexity, we will run multiple evaluations and measure for the least amount of dimensions. Those evaluations are:
 
-\begin{enumerate}
-    \item To evaluate the cold start latency we will send single requests to our deployment on an edge device with varying Wasm modules, representing either CPU- or I/O-bound actions. The goal is to examine the effect of the Wasm runtime's execution model (i.e. JIT, AoT or interpreted) on the cold start latency juxtaposed with the workload types. We also run it against the Docker-based baseline OpenWhisk. We use a similar approach as \citeauthor{McGrath2017} in their backoff test. In our case, we can fix the interval, since we can configure the deallocation time as well. This measurement will aid in answering research question 1.
+\begin{itemize}
+    \item For the cold start latency evaluation we will send concurrent requests to our deployment. The goal is to examine the effect of the Wasm runtime's execution model (i.e. JIT, AoT or interpreted) on the cold start latency.
+    We also run it against the Docker-based baseline OpenWhisk. We use a similar approach as \citeauthor{McGrath2017} in their backoff test. That is, in each step, sending $i$ concurrent requests and waiting for complete container deallocation inbetween steps, in order to trigger $i$ cold starts in every test. We run $N$ tests, so that $i \in {1..N}$ and $N$ is the upper bound we determine during the tests. We only use the CPU-bound workload, because the workload type does not matter for the cold start. 
+    In our case, we can fix the interval, since we can configure the deallocation time as well. Specifically, we set the \inl{idle-container} timeout to 10 seconds, meaning that OpenWhisk will remove the container after 10 seconds if no suitable request has come in during that time. This measurement will aid in answering research question 1.
+
     \item To evaluate the performance of the system we will run concurrent requests against an edge device under a mixed workload consisting of equal amounts of CPU- and I/O-bound actions. We repeat this measurement for all our Wasm runtimes and for baseline OpenWhisk. We use the approach by \citeauthor{McGrath2017} in their concurrency test, and pick workload types at random. This is to ensure that we evaluate the system for both types and because it is closer to a real-world scenario than measuring one type in isolation. It is also similar to the approach of \citeauthor{Hall2019}, in that we also have multiple concurrent requests but multiple clients are replaced by diverse workload types, which is likely equivalent. This measurement will help us answer research question 2.
+    
     \item Since serverless systems keep their containers warm for some time, the memory they claim is of interest. We will measure the memory footprint of keeping containers warm. \todo{Memory footprint of container during execution? Is that interesting?} We measure only the footprint of the container technology, not OpenWhisk. For Docker we use \inl{docker stats} and for our executor we use \inl{heaptrack} \footnote{\url{https://github.com/KDE/heaptrack}}. This measurement allows answering research question 3.
-\end{enumerate}
+\end{itemize}
 
 Finally, all measurements will lead us to a conclusion on research question 4.
 
+Our test procedure follows this pattern:
+
+\begin{enumerate}
+    \item Compile OpenWhisk standalone version in our modified wasm version (openwhisk-wasm) as well as the latest available version, which is \inl{1.0.0} (openwhisk-vanilla).
+    \item Start the OpenWhisk version under test on the test machine
+    \item Use the local \inl{wsk} command line tool to create the test action(s)
+    \item From a separate machine, start the test binary, which sends requests to the test machine
+\end{enumerate}
+
 \subsection{Deployment}
 
-We will use an Apache OpenWhisk deployment in lean mode, which was specifically developed for edge devices.
-\todo{Expand...}
+We run our evaluation on an edge device as well as a Desktop PC/Cloud Virtual Machine (one of those). The edge device is a Raspberry Pi Model 3B, which has 1 GB of RAM and is running the latest version of the 64-bit Raspberry Pi OS (version \inl{2020-08-20}). We are using the 64-bit version, because the \inl{wasmtime} runtime cannot be compiled for the 32-bit ARM architecture. The other device is \todo{what?}.
+
+Due to difficulties in deploying OpenWhisk on the ARM64-based Raspberry Pi with Kubernetes and ansible, we use the standalone Java version for evaluation. Since we are not benchmarking OpenWhisk itself, but rather the underlying container technology, we do not believe this to be a threat to validity. The standalone version uses OpenWhisk's \emph{lean} components for internal messaging and load balancing. These are components written specifically for deployment on resource-constrained devices.
 
 
+\subsection{Cold Start}
 
-\subsection{Lessons Learned / Results}
+\begin{figure}
+    \begin{center}
+        \input{figures/pi-cold-start-separate-hash-initTime.pgf}
+    \end{center}
+    \caption{}
+    \label{fig:pi-cold-start-initTime}
+\end{figure}
+
+The result of our cold start test is in figure \ref{fig:pi-cold-start-initTime}. While the deployment with Wasm runtimes had no issues, the vanilla OpenWhisk deployment was hard to test. Only after increasing the Raspberry Pi's swap memory from the default 100 MB to 1024 MB were we able to get results for up to 5 concurrent requests, whereas before, the Pi frequently froze and had to be rebooted. This rather anecdotal evidence is reflected in the graph, with the docker runtime having orders of magnitude higher cold start latencies than any of the Wasm runtimes. Note that the scale is logarithmic rather than linear, which may be suprising.
+
+
+\begin{figure}
+    \begin{center}
+        \input{figures/pi-cold-start-separate-hash-waitTime.pgf}
+    \end{center}
+    \caption{}
+    \label{fig:pi-cold-start-waitTime}
+\end{figure}
+
+On our edge device deployment, we ran our cold start test. The first version of the test creates an action called \inl{hash} (our CPU-bound workload), and then runs concurrent requests against it. In the result we notice that for 5 and more concurrent requests, there are only 4 cold starts. OpenWhisk will only create 4 containers and lets other requests wait until one of the currently executing ones finishes, so it can reuse the container. This is a fair optimization, but it does not let us test how 5 or more concurrent cold starts actually affect each other. Instead of creating just one action, we create $N$ actions with different names but the same code. That forces OpenWhisk to execute them in different containers. However, it will still only allocate 4 containers at a time, waiting for one of them to complete before removing it and starting the next. Thus, the performance of the container removal operation also becomes important, as it blocks the allocation of the next. This isn't reflected in the cold start latency, but we can look at the \inl{waitTime} annotation of OpenWhisk's activation record instead. It measures how long the activation spent waiting in OpenWhisk's queues. If the removal operation of Wasm runtimes is shorter than dockers, then Wasm action activations should have to spend less time waiting than their docker counterparts. Although, this value would also be affected by longer cold starts, so it can only provide a partial answer to this question.
+
+% Does OpenWhisk allocate containers corresponding to the number of logical CPUs?
+% median vs mean
+% how many runs is data based on?
