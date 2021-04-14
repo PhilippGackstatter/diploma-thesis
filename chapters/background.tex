@@ -5,9 +5,22 @@ In this chapter we establish a common background for serverless computing and We
 
 \section{Serverless computing}
 
+\subsection{Function-as-a-Service}
+% subsection on Serverless Architectures or the Function-as-a-Service model
+% -> some historical stuff
+% -> its positioning among the other cloud computing models (PaaS, SaaS)
+% -> application scenarios (which you will expand more on in Section 2.2 (serverless workloads)
+% -> and even some high-level figure of a FaaS system.
+% This would make the transition to section 2.1.1 smoother--i.e., you provide some more background on FaaS before jumping to the cold start problem). 
+
 \begin{quote}
     \quot{Serverless computing is an emerging cloud-based execution model in which user-defined functions are seamlessly and transparently hosted and managed by a distributed platform. \cite{Nastic2017}}
 \end{quote}
+
+Most developers know serverless computing in the form of Function-as-a-Service (FaaS). The seamless and transparent hosting and managing are done by the major cloud providers and offered through their Faas offerings known as Amazon Web Services's (AWS) Lambdas, Google Cloud Functions, Microsoft Azure Functions or IBM Cloud Functions. \citeauthor{Fox2017} point out, that these offerings are more appropiately described as »server-hidden«, since these platforms hide how functions are run or how scaling is done. They show serverless as a natural evolution from running applications on bare metal, then virtual machines, later containers and now functions. They point to the convenience of the application developer not having to worry about provisioning infrastructure and the associated scalability concerns as the major advantage of serverless \cite{Fox2017}. \citeauthor{Castro2019} observe a similar perspective: that serverless is the successor to Platform-as-a-Service (PaaS) such as Google's App Engine. But it improves on PaaS by charging users only for what they use -- the »pay-as-you-go« model \cite{Castro2019}.
+
+Managed services or Backend-as-a-Service (BaaS) are frequently used together with serverless, due to serverless functions being stateless. An example is AWS AppSync\footnote{\url{Serverless is frequently used together with }}, a managed GraphQL API, where AWS Lambdas can resolve fields of a GraphQL type, for example, by querying multiple databases at once.
+
 
 \citeauthor{McGrath2017} describe serverless as the manifestation of the idea, that applications are defined by events and the actions they trigger \cite{McGrath2017}. Events can be a user pressing a button on a frontend, a file being uploaded to a storage system or an edge device measuring sensor data and posting it. If many events occur at once, the serverless platform is able to scale-up to meet the demand, while the customer does not have to manage this process. In that case, the customer is paying per-use of functions. Serverless is also ideal if no events occur, because no cost for the user is incurred. Serverless platforms are able to offer that, because they follow the scale-to-zero principle: functions that aren't used don't take up resources. Or in theory, anyway. In practice, one caveat applies.
 
