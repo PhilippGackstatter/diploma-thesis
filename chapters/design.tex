@@ -1,7 +1,7 @@
 \chapter{Design}
 \label{chapter:design}
 
-In this chapter, we lay out the requirements for our implementation of Wasm containers in Apache OpenWhisk. Then we describe and discuss our implementation and the trade-offs involved.
+In this chapter, we lay out the requirements that an implementation of Wasm containers should satisfy in general. We introduce several WebAssembly runtimes and pick three of them for our implementation. We then expand on the requirements by looking at OpenWhisk specifically and how we need to modify it to enable our new runtime, but also detail other approaches that could be used to run WebAssembly workloads. Finally, we describe and discuss our concrete implementation in Apache OpenWhisk, how to achieve fast cold starts and high performance, while also examining the trade-offs involved.
 
 \section{Core approach}
 
