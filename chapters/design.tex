@@ -169,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 \end{minted}
-\caption{The main function of our WebAssembly executor.}
+\caption{The main function of our WebAssembly executor. The \inl{\#[cfg(feature = "...")]} macros allow us to define multiple runtimes while deciding at compile-time which of them to enable. Thus, we will have three separate binaries in the end, while each only contains the code necessary for its runtime.}
 \label{listing:wasm-executor-main}
 \end{listing}
 
@@ -194,7 +194,7 @@ One inefficiency of our design is that our executor store modules per container,
 
 \begin{figure}
     \includegraphics{figures/OpenWhiskConcurrencyLimitGreaterOne.pdf}
-    \caption{An example of a container's life cycle when OpenWhisk's concurrency limit is set to a value greater one. Note that a container is only represented in-memory by its module and instances, which is why there is no explicit \quot{container} label in the figure. The container is initialized with a module by OpenWhisk's call to \inl{/init}. Every \inl{/run} request to the same container id spawns a new instance of a WebAssembly module. In particular, two concurrent requests to \inl{/run} can be executed concurrently by the container where the instances are instantiated from the same module. How many requests can be handled in this manner is determined by OpenWhisk's concurrency limit. The instances are the actual \quot{containers} here, since they are the ones who are isolated from each other as well as the host. They are short-lived and never reused to guarntee that isolation, i.e. there is a one-to-one relationship between \inl{/run} requests and instances. The Wasm module will stay in memory until OpenWhisk's explicit call to \inl{/destroy}, which occurs after a container has been idle for some threshold time.}
+    \caption{An example of a container's life cycle when OpenWhisk's concurrency limit is set to a value greater one for that action. Note that a container is only represented in-memory by its module and instances, which is why there is no explicit \quot{container} label in the figure. The container is initialized with a module by OpenWhisk's call to \inl{/init}. Every \inl{/run} request to the same container id spawns a new instance of a WebAssembly module. In particular, two concurrent requests to \inl{/run} can be executed concurrently by the container where the instances are instantiated from the same module. How many requests can be handled in this manner is determined by OpenWhisk's concurrency limit. The instances are the actual \quot{containers} here, since they are the ones who are isolated from each other as well as the host. They are short-lived and never reused to guarntee that isolation, i.e. there is a one-to-one relationship between \inl{/run} requests and instances. The Wasm module will stay in memory until OpenWhisk's explicit call to \inl{/destroy}, which occurs after a container has been idle for some threshold time.}
     \label{fig:openwhisk-concurrency-limit-greater-one}
 \end{figure}
 
