@@ -18,3 +18,4 @@ What requests per second can a raspberry handle, how much for a EC2 instance (or
 - limiting memory
 - spectre mitigation
 - currently instances will be removed every time, i.e. an instance needs to load something from cache every time. A peristent instance could hold it in memory and return it even faster. Not technically impossibled (just a bit more complex), but currently unimplemented.
+- »as ​​time ​​spent ​​waiting on ​​network ​​(function ​​executions ​​or ​​otherwise)is ​​wasted ​​by ​​both ​​provider ​and ​customer« \citeauthor{Fox2017} -> Need for asynchronous execution of serverless functions (relationship with AWS Lambda, where node.js functions are asynchronous?)
