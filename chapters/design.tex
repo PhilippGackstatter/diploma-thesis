@@ -37,11 +37,31 @@ Wasmer \footnote{\url{https://github.com/wasmerio/wasmer}} is a WebAssembly runt
 
 Due to Wasm's simplicity in the binary format, there is wide-spread interest for running it on embedded devices. An example of that is \inl{wasm3} \footnote{\url{https://github.com/wasm3/wasm3}}, a Wasm interpreter that claims to be the fastest. They argue in favor of interpretation over JIT or AOT compilation, since startup latency is more important in many situations. Furthermore, portability and security are easier to achieve with this approach and development with the virtual machine is easier. Still, a performance penalty of 4 to 5x compared to JIT or 12x compared to native execution, leads us to believe that no amount of startup latency gain can make up for the performance loss. Even though our primary goal is reducing the cold start latency, the execution that follows cannot lack behind Docker containers massively, if adoption is to succeed. The relation between startup and execution performance is too far out of balance in this case.
 
+\newcommand{\linux}{\input{icons/linux.pdf_tex}}
+\newcommand{\macos}{\input{icons/macos.pdf_tex}}
+\newcommand{\windows}{\input{icons/windows.pdf_tex}}
+\newcommand{\freebsd}{\input{icons/freebsd.pdf_tex}}
+\newcommand{\android}{\input{icons/android.pdf_tex}}
+\newcommand{\ios}{\input{icons/ios.pdf_tex}}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{c | c | c | c}
+        Runtime        & ISA support & Execution modes  & Platform support\\
+        \hline
+        \inl{wasmtime} & \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
+        \inl{lucet}    & \inl{x86\_64} & AoT & \linux, \macos\\
+        \inl{wasmer}   & \inl{x86}, \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
+        \inl{wasm3}    & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{RISC-V}, ...  & Interpreted      & \linux, \macos, \windows, \freebsd, \android, \ios\\
+        \inl{wamr}     & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{aarch64}, ... & AoT, Interpreted & \linux, \macos, \windows, \android, ... \\
+    \end{tabular}
+    \caption{WebAssembly runtime feature overview.}
+    \label{table:wasm-runtime-overview}
+\end{table}
+
 However, there is still value in runtimes written specifically for embedded devices. The WebAssembly Micro Runtime (\inl{wamr}) \footnote{\url{https://github.com/bytecodealliance/wasm-micro-runtime/}} has support for all three mentioned execution modes. It has low memory usage and binary size. For example, the claimed binary size of the AoT runtime is just 50 kilo bytes. Further, the AoT runtime claims near-native speed. For execution on edge devices this may allow more modules to be executed compared to heaver-weight runtimes.
 
-
-
-
+A summary of the runtimes we looked at can be found in table \ref{table:wasm-runtime-overview}.
 
 \section{Requirements}
 
@@ -60,7 +80,7 @@ In the latter case, the controller uses its load balancer to determine which Inv
 Our focus is on the Invoker. It is the part of OpenWhisk responsible for \emph{invoking} the action. A number of steps are involved in that process \cite{OpenWhiskSystemDesign}.
 
 \begin{enumerate}
-    \item It retrieves the action's code and execution permissions from an Apache CouchDB database, where the Controller stored it during action creation. 
+    \item It retrieves the action's code and execution permissions from an Apache CouchDB database, where the Controller stored it during action creation.
     \item It instructs the local Docker daemon to start a new container, based on the runtime that the action needs to execute. This would be a \inl{openwhisk/action-nodejs-v10} image for JavaScript actions but could also be a generic black-box image (\inl{openwhisk/dockerskeleton}), that can execute any binary, such as one written in Rust or C.
     \item Finally, it injects the action's code into the container, invokes it with the given parameters and returns the result \cite{OpenWhiskSystemDesign}.
 \end{enumerate}
@@ -133,20 +153,20 @@ In summary, the requirements for our executor are
 \section{Executor implementation}
 
 
-To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based invoker will be replaced, to forward all the incoming requests to our new Wasm executor. 
+To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based invoker will be replaced, to forward all the incoming requests to our new Wasm executor.
 
 The Wasm executor will be written from scratch in the Rust programming language. There are a number of reasons for this choice.
 
 \begin{itemize}
-  \item It is a compiled language with performance close to that of C.
-  \item It uses LLVM in the backend so it can be compiled for almost any architecture.
-  \item It allows for \quot{fearless concurrency}, since the compiler can detect data races at compile time.
-  \item It has good support for asynchronous I/O, so it should be able to efficiently handle a large amount of concurrent requests.
-  \item Two out of the three Wasm runtimes implemented here are written in Rust, so embedding them is efficient and well documented.
+    \item It is a compiled language with performance close to that of C.
+    \item It uses LLVM in the backend so it can be compiled for almost any architecture.
+    \item It allows for \quot{fearless concurrency}, since the compiler can detect data races at compile time.
+    \item It has good support for asynchronous I/O, so it should be able to efficiently handle a large amount of concurrent requests.
+    \item Two out of the three Wasm runtimes implemented here are written in Rust, so embedding them is efficient and well documented.
 \end{itemize}
 
 \begin{listing}[ht]
-\begin{minted}{rust}
+    \begin{minted}{rust}
 #[async_std::main]
 async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "wasmtime_rt")]
@@ -169,8 +189,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 \end{minted}
-\caption{The main function of our WebAssembly executor. The \inl{\#[cfg(feature = "...")]} macros allow us to define multiple runtimes while deciding at compile-time which of them to enable. Thus, we will have three separate binaries in the end, while each only contains the code necessary for its runtime.}
-\label{listing:wasm-executor-main}
+    \caption{The main function of our WebAssembly executor. The \inl{\#[cfg(feature = "...")]} macros allow us to define multiple runtimes while deciding at compile-time which of them to enable. Thus, we will have three separate binaries in the end, while each only contains the code necessary for its runtime.}
+    \label{listing:wasm-executor-main}
 \end{listing}
 
 The entry point into our executor will be through HTTP endpoints. In order for our executor to handle requests concurrently, we use Rust's \inl{async} features. We will not make use of any advanced HTTP features, so the choice of the web framework doesn't matter too much. We use \inl{tide} \cite{Turon2021}, an asynchronous by-default web framework ideal for prototyping. It builds on top of \inl{async-std}, the asynchronous version of the Rust standard library. The main function in listing \ref{listing:wasm-executor-main} suits itself well to describe the architecture. The \inl{\#[async\_std::main]} macro starts this program in an asynchronous runtime, which enables us to use \inl{async} functions and \inl{await} them. The async runtime allows multiple concurrent requests to one of the endpoints, without us having to spawn threads explicitly. Although, we will come back to this later when it becomes necessary to spawn workloads onto dedicated threads -- and go into more detail on \inl{async-std}.
@@ -204,7 +224,7 @@ The result of keeping modules in the executor's memory, is that they are already
 \subsection{The WasmRuntime abstraction}
 
 \begin{listing}[ht]
-\begin{minted}{rust}
+    \begin{minted}{rust}
 pub trait WasmRuntime: Clone {
     fn initialize(
         &self,
@@ -222,8 +242,8 @@ pub trait WasmRuntime: Clone {
     fn destroy(&self, container_id: &str);
 }
 \end{minted}
-\caption{The \inl{WasmRuntime} abstraction that each Wasm runtimes implements.}
-\label{listing:wasm-executor-trait}
+    \caption{The \inl{WasmRuntime} abstraction that each Wasm runtimes implements.}
+    \label{listing:wasm-executor-trait}
 \end{listing}
 
 
@@ -258,7 +278,7 @@ Here a new action named \inl{cache} is created from a file \inl{cache.wasm} with
 
 
 \begin{listing}[ht]
-\begin{minted}{rust}
+    \begin{minted}{rust}
 ow_wasm_action::pass_json!(handler);
 
 pub fn handler(json: serde_json::Value) -> Result<serde_json::Value, anyhow::Error> {
@@ -277,8 +297,8 @@ pub fn handler(json: serde_json::Value) -> Result<serde_json::Value, anyhow::Err
     Ok(serde_json::json!({ "result": param1 + param2 }))
 }
 \end{minted}
-\caption{A simple add action in Rust that uses a macro from \inl{ow-wasm-action} to pass the received json to the \inl{handler} and return the \inl{Result} back to the runtime.}
-\label{listing:add-action-example}
+    \caption{A simple add action in Rust that uses a macro from \inl{ow-wasm-action} to pass the received json to the \inl{handler} and return the \inl{Result} back to the runtime.}
+    \label{listing:add-action-example}
 \end{listing}
 
 \inl{run} executes the module associated with the given container id and with the given parameters as input. As required by OpenWhisk, the parameter is a JSON object. The WebAssembly minimum-viable product (MVP), only supports integer data types natively. Higher-level data types often differ in their implementation details between languages, so a universal target format like Wasm cannot decide for one of them, without shutting certain languages out or making it harder for them to be used. Making Wasm modules compiled from different source languages interoperable is an ongoing process -- with WebAssembly interface types\footnote{\url{https://hacks.mozilla.org/2019/08/webassembly-interface-types/}}. The \inl{wasm-bindgen} Rust library already makes this process easy for JavaScript-WebAssembly interoperability. Unfortunately, it does not work with any of our runtimes. Even if both our runtime and the module is written in Rust originally, passing a pointer is not possible because WebAssembly is sandboxed and could not access the pointee. To pass a complex type like a JSON object to the module, we require that it uses a wrapper. Internally, the wrapper allocates a global buffer of bytes. It exports three functions to work with this buffer, most notably one that returns a pointer. When executing the module, the runtime serializes the JSON object as bytes and allocates enough space in the buffer to store them. It then acquires the pointer, which is relative to the module's memory's base pointer, offsets it appropriately and writes the JSON bytes into the buffer. Since the module doesn't know the number of bytes written, the runtime passes that as its argument. On the other side, the module reads the given number of bytes from the buffer and calls the user-provided handler function. Reading the return value of the action uses the same process. Conveniently, the user only has to implement a function that takes a JSON object and returns one in the success case; an error otherwise. Thus, this crude method of passing parameters can be completely hidden from action developers. A simple action can be seen in listing \ref{listing:add-action-example}. The action development process is visualized in figure \ref{fig:action-creation-flow}, which makes use of the \inl{binaryen}\footnote{\url{https://github.com/WebAssembly/binaryen}} toolchain to optimize the Rust-produced WebAssembly.
@@ -287,7 +307,7 @@ pub fn handler(json: serde_json::Value) -> Result<serde_json::Value, anyhow::Err
 \begin{figure}
     \includegraphics{figures/ActionCreationFlow.pdf}
     \caption{There are two phases in the action development. Our \inl{ow-wasm-action} library provides the abstraction to read the parameters the runtime has passed and to write the return value. To that end, it uses \inl{serde\_json}, a (de)serialization library to read and write the JSON objects. Afterwards, \inl{wasm-opt} runs an optimization pass on the produced WebAssembly, since the runtimes work better with already optimized Wasm.
-    Depending on what runtime is compiled into the executor, the corresponding precompiler is used. For \inl{wasmtime}, we have written the small \inl{ow-wasmtime-precompiler} program that does that, while \inl{wamrc} and \inl{wasmer compile} can be used for the others. Finally, the resulting precompiled binary is zipped which reduces the transmission size and makes OpenWhisk treat it as binary.}
+        Depending on what runtime is compiled into the executor, the corresponding precompiler is used. For \inl{wasmtime}, we have written the small \inl{ow-wasmtime-precompiler} program that does that, while \inl{wamrc} and \inl{wasmer compile} can be used for the others. Finally, the resulting precompiled binary is zipped which reduces the transmission size and makes OpenWhisk treat it as binary.}
     \label{fig:action-creation-flow}
 \end{figure}
 
@@ -296,13 +316,13 @@ The creation of the Wasi context as well as the actual execution is slightly dif
 \begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
 
     \item[Wasmtime] The \inl{wasmtime} runtime, as of version \inl{0.23}, uses \inl{cap-std}, a capability based implementation with a similar API as the Rust standard libary. We can construct its \inl{Dir} type and use it while building a \inl{WasiCtxBuilder}, ultimately yielding a \inl{WasiCtx}. The context is \emph{linked} with the module using the runtime's \inl{Linker}, which is similar to an operating system's dynamic linker. It resolves the imports that the module needs and instantiates it with them.
-    To execute, we create a \inl{Store} per request, thus per \inl{run} invocation. This is because a \inl{Store} is neither thread-safe nor meant to be long-lived, according to the documentation. The \inl{Store} is used as a collection of the instances and the host-defined items, according to the documentation.
+          To execute, we create a \inl{Store} per request, thus per \inl{run} invocation. This is because a \inl{Store} is neither thread-safe nor meant to be long-lived, according to the documentation. The \inl{Store} is used as a collection of the instances and the host-defined items, according to the documentation.
 
     \item[Wasmer] In \inl{wasmer} we build up a \inl{WasiEnv} with a very similar API as \inl{wasmtime}'s, including directory access. The module and environment are combined into an \inl{ImportObject} from which an \inl{Instance} is instantiated.
 
     \item[Wamr] \inl{wamr}'s API is slightly lower-level and less ergonomic compared to the other runtimes due to it being a C-API rather than an idiomatic Rust one.
-    Two functions need to be called globally, for the runtime to be instantiated and torn down, \inl{wasm\_runtime\_init} and \inl{wasm\_runtime\_destroy}, respectively.
-    Our implementation requires each runtime state to implement \inl{Clone}, a trait indicating that an object can be duplicated. A common pattern in Rust (also used by \inl{wasmtime} and \inl{wasmer}) is to implement the clone operation to produce a shallow copy. Internally, these objects typically use Rust's atomically reference-counted smart pointer (\inl{Arc}) to share object's across threads, safely. This makes it cheap to share the runtimes object across different threads while having access to the same underlying data. Thus, on each request a clone of the runtime is created and destroyed (dropped) at the end. Because of that we cannot call \inl{wasm\_runtime\_destroy} in the runtime's \inl{Drop} implementation. Instead, we use another internal Arc, which is instantiated with an object that calls the initialization function when it is created, and destroys the context when it is being dropped. Because the \inl{Arc} will live as long as the runtime and only calls the contained object's \inl{drop} function when all other references have gone away, this implements our requirements perfectly.
+          Two functions need to be called globally, for the runtime to be instantiated and torn down, \inl{wasm\_runtime\_init} and \inl{wasm\_runtime\_destroy}, respectively.
+          Our implementation requires each runtime state to implement \inl{Clone}, a trait indicating that an object can be duplicated. A common pattern in Rust (also used by \inl{wasmtime} and \inl{wasmer}) is to implement the clone operation to produce a shallow copy. Internally, these objects typically use Rust's atomically reference-counted smart pointer (\inl{Arc}) to share object's across threads, safely. This makes it cheap to share the runtimes object across different threads while having access to the same underlying data. Thus, on each request a clone of the runtime is created and destroyed (dropped) at the end. Because of that we cannot call \inl{wasm\_runtime\_destroy} in the runtime's \inl{Drop} implementation. Instead, we use another internal Arc, which is instantiated with an object that calls the initialization function when it is created, and destroys the context when it is being dropped. Because the \inl{Arc} will live as long as the runtime and only calls the contained object's \inl{drop} function when all other references have gone away, this implements our requirements perfectly.
 
 \end{description}
 
@@ -328,7 +348,7 @@ To test the theory, whether the thread pool model is able to handle more request
 
 \begin{enumerate}
     \item Compute-bound: Calculating a large prime number.
-    % \item Filesystem-I/O-bound: Reading a 30 MB file from disk.
+          % \item Filesystem-I/O-bound: Reading a 30 MB file from disk.
     \item Network-I/O-bound: Making a long-running (1 second) HTTP request.
 \end{enumerate}
 
