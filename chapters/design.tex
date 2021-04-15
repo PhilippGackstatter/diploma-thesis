@@ -30,7 +30,9 @@ The executor will be built with these concerns and requirements in mind:
 
 The requirements are discussed in more detail in the following sections. Finding a suitable serverless framework that we can modify and integrate with, will be the topic of the next section. In section \ref{chapter:background} we have seen how WebAssembly provides some of these requirements, such as sandboxing and relatively good execution speed. However, for our implementation we need concrete WebAssembly runtimes that provide these properties, so we will explore the options for WebAssembly runtimes and work out the differences. The choice for which language and libraries to implement our executor with, will be driven by how the Wasm runtime we choose can be integrated as well as having access to highly performant, concurrent I/O and good support for program correctness, including thread-safety.
 
-\section{Serverless frameworks}
+\subsection{Apache OpenWhisk}
+
+We use Apache OpenWhisk as the framework to implement WebAssembly support for. OpenWhisk is a production-ready framework, used as the basis for IBM's Cloud Functions. Thus, implementing Wasm support in OpenWhisk would show the viability of the approach in the real world. The framework is also frequently used by serverless researchers to implement new ideas such as pause containers to reduce cold start times \cite{Mohan2019} or Wasm support via \inl{node.js} \cite{Hall2019}, making it a well-respected framework. OpenWhisk also has \emph{lean} components, which are lighter-weight replacements for its heavier ones, such as Kafka. That enables OpenWhisk to be deployed on edge devices, such as Raspberry Pis, which is how we plan to evaluate our implementations.
 
 \section{WebAssembly runtimes}
 \label{section:wasm-runtimes}
