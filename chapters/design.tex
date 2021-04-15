@@ -349,6 +349,24 @@ In what task or thread the module is executed, will be discussed shortly.
 \subsubsection{Cleanup}
 Finally, the \inl{destroy} function removes the container, which simply means freeing the memory taken up by the module. This is fast and thread-safe, since each container manages its own Wasm module. Once OpenWhisk has decided to destroy the container, it will synchronize internally to not call \inl{run} on it again.
 
+An overview of the entire executor workflow can be seen in figure \ref{fig:executor-overview}.
+
+\begin{figure}
+    \includegraphics{figures/ExecutorOverview.pdf}
+    \caption{An overview of the executor architecture. \inl{init} decodes the received bytes using \inl{base64} and unzips the result. From there they are deserialized back into a \inl{Module} instance, in the case of \inl{wasmtime} and \inl{wasmer}. The module and capabilities are then stored in the HashMap. When a \inl{run} request comes in, the module and capabilities are looked up. The capabilities are transformed to a WasiContext (named differently under different runtimes), which is used to instantiate an instance, together with the module. The parameters for this \inl{run} request are serialized to JSON and written into the instance's memory. When its \inl{main()} function is invoked, the JSON is deserialized and passed to the actual handler function. The result is returned to OpenWhisk. A \inl{destroy} request simply translates to a remove operation on the HashMap. Note that this figure is accurate for \inl{wasmtime} and \inl{wasmer}, but not entirely for \inl{wamr}. The latter runtime's module creation is slightly different, as explained above.}
+    \label{fig:executor-overview}
+\end{figure}
+
+\subsection{Implementation alternatives}
+Instead of caching modules some may wish to cache instances instead. The case for reusing instances is to avoid costly setup in the action itself, like connection pools to external resources or to avoid rebuilding a cache on every request.
+We need to manage instances in that case, i.e. we need a pool of instances and a management system around it. When a new request comes in, we would ideally like to reuse an existing instance. That requires synchronizing with other threads, to decide which thread gets to reuse an instance and which needs to create a new one. We would need per-instance synchronization to check whether an instance is currently in use or usable. It is questionable whether the synchronization overhead would be less costly than always creating a new instance, in particular because creating instances is a relatively cheap operation. For this reason we decided against it.
+
+% As seen in figure \ref{fig:executor-overview}, a Wasi context is created per \inl{run} invocation. If a module needs access to a file for instance, creating the context requires requires opening file descriptors. Similarly, with a future network API in Wasi, this might require invoking more system calls. These calls may not be expensive per-se, but as we've seen in this work as a whole, frontloading resource instantiation as much as possible can have net performance benefits. In particular, if it's possible to pre-create the Wasi Context we should do it. In \inl{wasmtime} this is not possible, because the \inl{WasiCtx} is not thread-safe. In \inl{wasmer} on other hand, the \inl{WasiEnv} is thread-safe and can be cheaply cloned to send across threads. With both runtimes, we are creating one context per instance.
+
+% Furthermore, with a new instance per request, we have per request isolation and fully stateless execution -- something that the action developer can rely upon.
+
+
+
 \subsection{Enabling concurrency}
 
 The executor consists of a web server that can take requests from the invoker asynchronously and concurrently. Because OpenWhisk doesn't communicate with the Wasm modules directly, but through the executor, the \inl{/start} endpoint simply returns the executors own network address. This endpoint also returns an identifier for the container, so that OpenWhisk can handle its life cycle, i.e. the above-mentioned mechanism of keeping it warm for some time, for a faster subsequent invocation. There is a chance that this mechanism may not be necessary for Wasm modules, as they are much more lightweight in their instantiation. We will come back to this question later in our optimization discussion.
