@@ -35,14 +35,16 @@ We infer two workloads from these. Both CPU- and network-I/O-bound workloads are
 OpenWhisk makes its docker runtime images available for the \inl{x86\_64} architecture only, so we need to build this image for \inl{aarch64}\footnote{\url{https://hub.docker.com/r/pgackst/dockerskeleton}}, in order to execute on our Raspberry Pi. The concrete implementations of our evaluation actions are the following programs.
 
 \begin{description}[style=multiline, leftmargin=2.5cm, font=\bfseries]
-    \item[CPU-bound] For this workload, we repeatedly hash a bytestring in a loop using the \inl{blake3} algorithm. This is a convenient choice since its reference implementation is in Rust. Hashing is CPU-bound and free from system calls, so it is a good candiadate for this workload type. We choose the number of iterations so that the completion takes roughly 100ms on the native system, in order to have a non-trivial amount of work to be done for each invocation -- more than OpenWhisk needs for its scheduling internally.
+    \item[CPU-bound] For this workload, we repeatedly hash a bytestring in a loop using the \inl{blake3} \todo{blake3 footnote} algorithm. This is a convenient choice since its reference implementation is in Rust. Hashing is CPU-bound and free from system calls, so it is a good candiadate for this workload type. We choose the number of iterations so that the completion takes roughly 100ms on the native system, in order to have a non-trivial amount of work to be done for each invocation -- more than OpenWhisk needs for its scheduling internally.
     \item[Network-I/O-bound] For this workload we make an HTTP request to a local server which always takes exactly 100ms to complete.
 \end{description}
 
+% Note that we deliberately do not use no_std or other mechanisms to make the modules small, so as to represent a real-world applicable use-case where Rust's std library would most likely be used
 
 \subsection{Setup}
 
-We want to measure the cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. In the cold start case, OpenWhisk additionally attaches an \inl{initTime} annotation to the record, which is the cold start latency. The record also contains a \inl{duration} field which is the duration of the entire execution, including the potential cold start time. In figure \ref{fig:evaluation-time-measurement} we show an overview of the two measurements we calculate.
+We want to measure the cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. Each activation record contains a \inl{waitTime} annotation, which is the time between the arrival of the request and the provisioning of a container. It's important to note, that this applies only to docker, since a Wasm container is only represented as a Wasm module, which is created during the initialization. However, the \inl{waitTime} does not include that initialization time, which is instead given as a separate annotation \inl{initTime}. Thus, for a fair comparison between both container runtimes, we define the cold start time as \inl{waitTime + initTime}. Measured this way, the cold start time is simply the time between OpenWhisk receiving the request and the container being ready for execution.
+The record also contains a \inl{duration} field which is the duration of the entire execution, including the potential \inl{initTime}. To measure the pure performance of the container runtimes, we subtract \inl{initTime} from \inl{duration}, if necessary. In figure \ref{fig:evaluation-time-measurement} we show an overview of measurements we calculate.
 
 \begin{figure}
     \begin{center}
@@ -102,18 +104,18 @@ Due to difficulties in deploying OpenWhisk on the ARM64-based Raspberry Pi with 
     \begin{center}
         \input{figures/pi-cold-start-separate-hash-initTime.pgf}
     \end{center}
-    \caption{}
+    \caption{The cold start latency with a CPU-bound workload on a Raspberry Pi.}
     \label{fig:pi-cold-start-initTime}
 \end{figure}
 
-The result of our cold start test is in figure \ref{fig:pi-cold-start-initTime}. While the deployment with Wasm runtimes had no issues, the vanilla OpenWhisk deployment was hard to test. Only after increasing the Raspberry Pi's swap memory from the default 100 MB to 1024 MB were we able to get results for up to 5 concurrent requests, whereas before, the Pi frequently froze and had to be rebooted. This rather anecdotal evidence is reflected in the graph, with the docker runtime having orders of magnitude higher cold start latencies than any of the Wasm runtimes. Note that the scale is logarithmic rather than linear, which may be suprising.
+The result of our cold start test can be seen in figure \ref{fig:pi-cold-start-initTime}. While testing the deployment with Wasm runtimes showed no issues, the vanilla OpenWhisk deployment was hard to test. Only after increasing the Raspberry Pi's swap memory from the default 100 MB to 1024 MB were we able to get results for up to 5 concurrent requests, whereas before, the Pi froze and had to be rebooted. This rather anecdotal evidence is, however, reflected in the graph, with the docker runtime having orders of magnitude higher cold start latencies than any of the Wasm runtimes. Note that the scale is logarithmic rather than linear, which may be suprising.
 
 
 \begin{figure}
     \begin{center}
         \input{figures/pi-cold-start-separate-hash-waitTime.pgf}
     \end{center}
-    \caption{}
+    \caption{The cold start wait time with a CPU-bound workload on a Raspberry Pi.}
     \label{fig:pi-cold-start-waitTime}
 \end{figure}
 
@@ -122,3 +124,4 @@ On our edge device deployment, we ran our cold start test. The first version of 
 % Does OpenWhisk allocate containers corresponding to the number of logical CPUs?
 % median vs mean
 % how many runs is data based on?
+% use a 30MB or sth module to test WAMR impl performance then
