@@ -84,7 +84,7 @@ Due to Wasm's simplicity in the binary format, there is wide-spread interest for
 
 However, there is still value in runtimes written specifically for embedded devices. The WebAssembly Micro Runtime (\inl{wamr}) \footnote{\url{https://github.com/bytecodealliance/wasm-micro-runtime/}} has support for all three mentioned execution modes. It has low memory usage and binary size. For example, the claimed binary size of the AoT runtime is just 50 kilo bytes. Further, the AoT runtime claims near-native speed. For execution on edge devices this may allow more modules to be executed compared to heaver-weight runtimes.
 
-A summary of the runtimes we looked at can be found in table \ref{table:wasm-runtime-overview}.
+A summary of the runtimes we looked at can be found in table \ref{table:wasm-runtime-overview}. The diversity of execution modes sticks out -- clearly no single mode is the best for all scenarios. Except for \inl{lucet}, all runtimes have good platform support. However, particularly for edge devices, the lack of support for the 32-bit arm architecture can be challenging in the Rust-written runtimes (\inl{wasmtime}, \inl{wasmer}, \inl{lucet}). The support in the other ones, written in C, is there.
 
 \section{WebAssembly in OpenWhisk}
 
