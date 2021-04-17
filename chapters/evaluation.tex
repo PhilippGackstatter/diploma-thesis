@@ -43,7 +43,8 @@ OpenWhisk makes its docker runtime images available for the \inl{x86\_64} archit
 
 \subsection{Setup}
 
-We want to measure the cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. Each activation record contains a \inl{waitTime} annotation, which is the time between the arrival of the request and the provisioning of a container. It's important to note, that this applies only to docker, since a Wasm container is only represented as a Wasm module, which is created during the initialization. However, the \inl{waitTime} does not include that initialization time, which is instead given as a separate annotation \inl{initTime}. Thus, for a fair comparison between both container runtimes, we define the cold start time as \inl{waitTime + initTime}. Measured this way, the cold start time is simply the time between OpenWhisk receiving the request and the container being ready for execution.
+We want to measure the cold start latency and action execution time across all our evaluations. To that end, we utilize OpenWhisk's activation record, which is a collection of data resulting from each action invocation.  Recall that OpenWhisk either initializes and runs the action, in the case of a cold start, or skips the initilization and runs it in a warm container. Each activation record contains a \inl{waitTime} annotation, which is the time between the arrival of the request and the provisioning of a container. It's important to note, that this applies only to docker, since a Wasm container is only represented as a Wasm module, which is created during the initialization. However, the \inl{waitTime} does not include that initialization time, which is recorded as a separate annotation: \inl{initTime}. Thus, for a fair comparison between both container runtimes, we define the cold start time as \inl{waitTime + initTime}. Measured this way, the cold start time is simply the time between OpenWhisk receiving the request and the container being ready for execution. Since both times are part of the latency the user perceives, we believe this to be an accurate measurement. It's important to note that this allows for a fair comparison in relative terms, but the recorded cold start times are not made up entirely of the container runtimes' startup cost, but also of OpenWhisk internals, which may account for a significant portion.
+
 The record also contains a \inl{duration} field which is the duration of the entire execution, including the potential \inl{initTime}. To measure the pure performance of the container runtimes, we subtract \inl{initTime} from \inl{duration}, if necessary. In figure \ref{fig:evaluation-time-measurement} we show an overview of measurements we calculate.
 
 \begin{figure}
@@ -93,33 +94,41 @@ Our test procedure follows this pattern:
 
 \subsection{Deployment}
 
-We run our evaluation on an edge device as well as a Desktop PC/Cloud Virtual Machine (one of those). The edge device is a Raspberry Pi Model 3B, which has 1 GB of RAM and is running the latest version of the 64-bit Raspberry Pi OS (version \inl{2020-08-20}). We are using the 64-bit version, because the \inl{wasmtime} runtime cannot be compiled for the 32-bit ARM architecture. The other device is \todo{what?}.
+We run our evaluation on an edge device as well as a \inl{x86\_64} desktop machine. The edge device is a Raspberry Pi Model 3B, which has 1 GB of RAM and is running the latest version of the 64-bit Raspberry Pi OS (version \inl{2020-08-20}). We are using the 64-bit version, because the \inl{wasmtime} runtime cannot be compiled for the 32-bit ARM architecture. The desktop has an Intel® Xeon® E3-1231 v3 (3.40 GHz) server-grade CPU with 4 physical cores and 8 logical threads. Mass storage is a Samsung SSD 850 EVO -- which is where Docker images are stored and loaded from -- it has 8 GB of RAM and is running Ubuntu 20.04.2 LTS.
 
 Due to difficulties in deploying OpenWhisk on the ARM64-based Raspberry Pi with Kubernetes and ansible, we use the standalone Java version for evaluation. Since we are not benchmarking OpenWhisk itself, but rather the underlying container technology, we do not believe this to be a threat to validity. The standalone version uses OpenWhisk's \emph{lean} components for internal messaging and load balancing. These are components written specifically for deployment on resource-constrained devices.
 
-
 \subsection{Cold Start}
 
-\begin{figure}
-    \begin{center}
-        \input{figures/pi-cold-start-separate-hash-initTime.pgf}
-    \end{center}
-    \caption{The cold start latency with a CPU-bound workload on a Raspberry Pi.}
-    \label{fig:pi-cold-start-initTime}
-\end{figure}
-
-The result of our cold start test can be seen in figure \ref{fig:pi-cold-start-initTime}. While testing the deployment with Wasm runtimes showed no issues, the vanilla OpenWhisk deployment was hard to test. Only after increasing the Raspberry Pi's swap memory from the default 100 MB to 1024 MB were we able to get results for up to 5 concurrent requests, whereas before, the Pi froze and had to be rebooted. This rather anecdotal evidence is, however, reflected in the graph, with the docker runtime having orders of magnitude higher cold start latencies than any of the Wasm runtimes. Note that the scale is logarithmic rather than linear, which may be suprising.
-
+The first version of the test created an action called \inl{hash} (our CPU-bound workload), and then runs concurrent requests against it. In the result we noticed that for 5 and more concurrent requests, there are only 4 cold starts. OpenWhisk will only create 4 containers and lets other requests wait until one of the currently executing ones finishes, so it can reuse the container. This is a fair optimization, but it does not let us test how 5 or more concurrent cold starts actually affect each other. So, instead of creating just one action, we create $N$ actions with different names but the same code. That forces OpenWhisk to execute them in different containers. However, it will still only allocate 4 containers at a time, waiting for one of them to complete before removing it and starting the next. Thus, the performance of the container removal operation also becomes important, as it blocks the provisioning of the next. It is implicitly part of the cold start time as we define it, since a container that needs to wait due to a slow remove operation from another container will have a higher \inl{waitTime}.
+% This isn't reflected in the cold start latency, but we can look at the \inl{waitTime} annotation of OpenWhisk's activation record instead. It measures how long the activation spent waiting in OpenWhisk's queues. If the removal operation of Wasm runtimes is shorter than dockers, then Wasm action activations should have to spend less time waiting than their docker counterparts. Although, this value would also be affected by longer cold starts, so it can only provide a partial answer to this question.
 
 \begin{figure}
     \begin{center}
-        \input{figures/pi-cold-start-separate-hash-waitTime.pgf}
+        \input{figures/pi-cold-start-separate-hash.pgf}
     \end{center}
-    \caption{The cold start wait time with a CPU-bound workload on a Raspberry Pi.}
-    \label{fig:pi-cold-start-waitTime}
+    \caption{The cold start time with a CPU-bound workload on a Raspberry Pi with both Docker and Wasm-based container runtimes.}
+    \label{fig:pi-cold-start-hash}
 \end{figure}
 
-On our edge device deployment, we ran our cold start test. The first version of the test creates an action called \inl{hash} (our CPU-bound workload), and then runs concurrent requests against it. In the result we notice that for 5 and more concurrent requests, there are only 4 cold starts. OpenWhisk will only create 4 containers and lets other requests wait until one of the currently executing ones finishes, so it can reuse the container. This is a fair optimization, but it does not let us test how 5 or more concurrent cold starts actually affect each other. Instead of creating just one action, we create $N$ actions with different names but the same code. That forces OpenWhisk to execute them in different containers. However, it will still only allocate 4 containers at a time, waiting for one of them to complete before removing it and starting the next. Thus, the performance of the container removal operation also becomes important, as it blocks the allocation of the next. This isn't reflected in the cold start latency, but we can look at the \inl{waitTime} annotation of OpenWhisk's activation record instead. It measures how long the activation spent waiting in OpenWhisk's queues. If the removal operation of Wasm runtimes is shorter than dockers, then Wasm action activations should have to spend less time waiting than their docker counterparts. Although, this value would also be affected by longer cold starts, so it can only provide a partial answer to this question.
+The result of our cold start test can be seen in figure \ref{fig:pi-cold-start-hash}. While testing the deployment with Wasm runtimes showed no performance issues, the vanilla OpenWhisk deployment was harder to test. It executed a Docker pull operation on every container start, resulting in a higher \inl{waitTime} than absolutely necessary. This can be turned off, which improved cold start times. Moreover, only after increasing the Raspberry Pi's swap memory from the default 100 MB to 1024 MB were we able to get results for up to 6 concurrent requests, whereas before, the Pi froze and had to be rebooted. This rather anecdotal evidence is, however, reflected in the figure, with the docker runtime having orders of magnitude higher cold start latencies than any of the Wasm runtimes. At 5 and 6 concurrent requests, the OpenWhisk log files showed Docker commands timing out and the testing time became unreasonably long -- as reflected in the figure -- which is why we stopped testing at that point. Note that the scale is logarithmic rather than linear, which may be suprising.
+
+Even at 2 concurrent requests, the Wasm executors have a cold start time of around one second, increasing with more requests. \inl{wasmtime} has the most consistent behaviour, followed by \inl{wamr} and \inl{wasmer}. Overall, the runtimes are very similar in their startup performance, especially \inl{wasmtime} and \inl{wamr}, even though they are written in different languages and use different execution modes. The Wasm executors have, on average, less than 1\% the cold start time than docker.
+
+% Look at cold start time only for wasm runtimes, then reference the docker cold start time on an x86 host and draw a comparison. I.e. if the runtimes achieve a startup time of ~100ms on an edge device and docker achieves the same on an x86 host, then we can perhaps conclude that the Wasm runtimes are suitable/acceptable as container runtimes for the serverless edge.
+
+\begin{figure}
+    \begin{center}
+        \input{figures/pc-cold-start-separate-hash.pgf}
+    \end{center}
+    \caption{The cold start time with a CPU-bound workload on a Desktop machine with both Docker and Wasm-based container runtimes. The docker values range between 869 ms and 2873 ms, while the Wasm values generally range from 47 ms to 180 ms.}
+    \label{fig:pc-cold-start-hash}
+\end{figure}
+
+For comparison, the cold start times on our \inl{x86\_64} desktop machine are in figure \ref{fig:pc-cold-start-hash}. The relative differences are similar to the Raspberry Pi. In particular, the Wasm executors behave more predictably on both machines. The average improvement in cold start times are 94\% for \inl{wasmtime} and \inl{wamr} and 93\% for \inl{wasmer}. The improvements are very consistent across the number of concurrent requests, with a standard deviation of less than 0.01 percentage points for all runtimes.
+
+These comparisons give a good holistic picture of the performance of both runtimes in the OpenWhisk context. However, because the measurements include other OpenWhisk specifics, they are less useful for a general container runtime comparison. Thus...
+% Run experiment: cold start, then warm start -- see relationship between the two, for docker & wasm
 
 % Does OpenWhisk allocate containers corresponding to the number of logical CPUs?
 % median vs mean
