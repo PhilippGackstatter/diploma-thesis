@@ -98,6 +98,8 @@ We run our evaluation on an edge device as well as a \inl{x86\_64} desktop machi
 
 Due to difficulties in deploying OpenWhisk on the ARM64-based Raspberry Pi with Kubernetes and ansible, we use the standalone Java version for evaluation. Since we are not benchmarking OpenWhisk itself, but rather the underlying container technology, we do not believe this to be a threat to validity. The standalone version uses OpenWhisk's \emph{lean} components for internal messaging and load balancing. These are components written specifically for deployment on resource-constrained devices.
 
+\section{Test results}
+
 \subsection{Cold Start}
 
 The first version of the test created an action called \inl{hash} (our CPU-bound workload), and then runs concurrent requests against it. In the result we noticed that for 5 and more concurrent requests, there are only 4 cold starts. OpenWhisk will only create 4 containers and lets other requests wait until one of the currently executing ones finishes, so it can reuse the container. This is a fair optimization, but it does not let us test how 5 or more concurrent cold starts actually affect each other. So, instead of creating just one action, we create $N$ actions with different names but the same code. That forces OpenWhisk to execute them in different containers. However, it will still only allocate 4 containers at a time, waiting for one of them to complete before removing it and starting the next. Thus, the performance of the container removal operation also becomes important, as it blocks the provisioning of the next. It is implicitly part of the cold start time as we define it, since a container that needs to wait due to a slow remove operation from another container will have a higher \inl{waitTime}.
@@ -137,7 +139,19 @@ These comparisons give a good holistic picture of the performance of both runtim
 
 \subsection{Throughput}
 
-The I/O-bound test is supposed to test the container runtimes' ability to handle concurrent network requests. As we've explored in chapter \ref{chapter:background}, serverless functions are frequently used with external services, such as databases. This test emulates this behaviour by blocking for 300ms, implemented using a simple thread sleep. In the Wasm executors, this is implemented with the capabilities, which allows the Wasm runtimes to supply native host functions as imports to the module. The module can then use these functions as if they were part of the module. This way, we could easily implement an actual blocking HTTP request. However, the lack of interface types means the module can only call native functions with integer parameters and return values, such that the practical use is still inhibited.
+In previous cold start test it became apparent, that running OpenWhisk vanilla with Docker on the Raspberry Pi is challenging. Because OpenWhisk runs four containers under heavy load, it puts too much strain on our test edge device. Thus, we make use of the previously introduced concurrency limit that we can set for each action. We set the limit to 10, such that 10 actions can be executed concurrently in the same container. With this setup, we can run the load test for the Pi because OpenWhisk only creates two containers -- at least up to a certain threshold. We use the same parameters for creating the Wasm actions. With that we can get the result in figure \ref{fig:pi-load-mixed}. OpenWhisk vanilla manages to handle up to 10 concurrent requests, at which point it creates a third container, which forces the Pi to use its swap memory and become orders of magnitude slower. Hence, at this point we stopped testing. The workload we run is mixed and made up of an equal amount of I/O- and CPU-bound actions. It is run in pseudo-random order, such that each test execution with the same parameters will put the same load on the container runtime under test.
+
+We can see a stronger difference in all container runtimes than in the cold start test. \inl{wasmer} is 3.7x faster than docker, \inl{wasmtime} by about 3x and \inl{wamr} by 2.3x. The latter is the most consistent across the tests, whereas \inl{wasmtime} and \inl{wasmer} have a high fluctuation depending on the number of concurrent requests.
+
+\begin{figure}
+    \begin{center}
+        \input{figures/pi-load-mixed.pgf}
+    \end{center}
+    \caption{The throughput with an equal amount of I/O- and CPU-bound workload on a Raspberry Pi with both Docker and Wasm-based container runtimes.}
+    \label{fig:pi-load-mixed}
+\end{figure}
+
+To get a more isolated picture of the container runtimes performance, we test the workloads separately on our Desktop machine. The I/O-bound test is supposed to test the container runtimes' ability to handle concurrent network requests. As we've explored in chapter \ref{chapter:background}, serverless functions are frequently used with external services, such as databases. This test emulates this behaviour by blocking for 300ms, implemented using a simple thread sleep. In the Wasm executors, this is implemented with the capabilities, which allows the Wasm runtimes to supply native host functions as imports to the module. The module can then use these functions as if they were part of the module. This way, we could easily implement an actual blocking HTTP request. However, the lack of interface types means the module can only call native functions with integer parameters and return values, such that the practical use is still inhibited.
 
 \begin{figure}
     \begin{center}
