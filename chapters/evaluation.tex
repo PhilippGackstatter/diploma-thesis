@@ -139,19 +139,36 @@ These comparisons give a good holistic picture of the performance of both runtim
 
 \subsection{Throughput}
 
-In previous cold start test it became apparent, that running OpenWhisk vanilla with Docker on the Raspberry Pi is challenging. Because OpenWhisk runs four containers under heavy load, it puts too much strain on our test edge device. Thus, we make use of the previously introduced concurrency limit that we can set for each action. We set the limit to 10, such that 10 actions can be executed concurrently in the same container. With this setup, we can run the load test for the Pi because OpenWhisk only creates two containers -- at least up to a certain threshold. We use the same parameters for creating the Wasm actions. With that we can get the result in figure \ref{fig:pi-load-mixed}. OpenWhisk vanilla manages to handle up to 10 concurrent requests, at which point it creates a third container, which forces the Pi to use its swap memory and become orders of magnitude slower. Hence, at this point we stopped testing. The workload we run is mixed and made up of an equal amount of I/O- and CPU-bound actions. It is run in pseudo-random order, such that each test execution with the same parameters will put the same load on the container runtime under test.
-
-We can see a stronger difference in all container runtimes than in the cold start test. \inl{wasmer} is 3.7x faster than docker, \inl{wasmtime} by about 3x and \inl{wamr} by 2.3x. The latter is the most consistent across the tests, whereas \inl{wasmtime} and \inl{wasmer} have a high fluctuation depending on the number of concurrent requests.
-
 \begin{figure}
     \begin{center}
-        \input{figures/pi-load-mixed.pgf}
+        \input{figures/pi-pc-load-mixed.pgf}
     \end{center}
-    \caption{The throughput with an equal amount of I/O- and CPU-bound workload on a Raspberry Pi with both Docker and Wasm-based container runtimes.}
-    \label{fig:pi-load-mixed}
+    \caption{The throughput in requests per second with an equal amount of I/O- and CPU-bound workload on a Raspberry Pi and a Desktop machine with both Docker and Wasm-based container runtimes.}
+    \label{fig:pi-pc-load-mixed}
 \end{figure}
 
-To get a more isolated picture of the container runtimes performance, we test the workloads separately on our Desktop machine. The I/O-bound test is supposed to test the container runtimes' ability to handle concurrent network requests. As we've explored in chapter \ref{chapter:background}, serverless functions are frequently used with external services, such as databases. This test emulates this behaviour by blocking for 300ms, implemented using a simple thread sleep. In the Wasm executors, this is implemented with the capabilities, which allows the Wasm runtimes to supply native host functions as imports to the module. The module can then use these functions as if they were part of the module. This way, we could easily implement an actual blocking HTTP request. However, the lack of interface types means the module can only call native functions with integer parameters and return values, such that the practical use is still inhibited.
+In the previous cold start test it became apparent that running OpenWhisk vanilla with Docker on the Raspberry Pi is challenging. Because OpenWhisk runs four containers under heavy load, it puts too much strain on our test edge device. Thus, we make use of the previously introduced concurrency limit that we can set for each action. We set the limit to 10, such that 10 actions can be executed concurrently in the same container. With this setup, we can run the load test for the Pi, because OpenWhisk only creates two containers -- at least up to a certain threshold. Log collection is another process that tends to fail often, so we use \inl{--logsize 0} when creating the action, to prevent OpenWhisk from attempting to collect them. We use the same parameters for creating the Wasm actions. With that we get the result in figure \ref{fig:pi-pc-load-mixed}. OpenWhisk vanilla manages to handle up to 10 concurrent requests on the Pi, at which point it creates a third container, which forces the Pi to use its swap memory and become orders of magnitude slower. Hence, at this point we stopped testing. The workload we run is mixed and made up of an equal amount of I/O- and CPU-bound actions. Whether one or the other is executed is determined at random, such that, on average, half will be I/O-bound and half will be CPU-bound. We execute two runs and take the average for each number of concurrent requests. Note that the CPU-bound workload is chosen such that the execution time is similar on the Raspberry and the Desktop machine, since the blocking I/O-bound workload also takes the same amount of time on both devices. That makes the results more comparable. This test is executed with Apache JMeter\footnote{\url{https://jmeter.apache.org/}}, a load testing tool. 
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{c | c | c}
+        Runtime        & Raspberry Pi & Desktop\\
+        \hline
+        \inl{wasmtime} & 3.8x & 2.2x\\
+        \inl{wasmer}   & 4.2x & 3.0x\\
+        \inl{wamr}     & 2.4x & 1.6x\\
+    \end{tabular}
+    \caption{Average factor by which the respective WebAssembly executors are faster than Docker in the mixed workload scenario.}
+    \label{table:pi-pc-load-mixed-improvements}
+\end{table}
+
+We can immediately see a a stronger difference in all container runtimes than in the cold start test.
+The factors of improvements are listed in table \ref{table:pi-pc-load-mixed-improvements}, where we can see, that on both devices, the WebAssembly executors are better able to handle a mixed workload. The executors perform similarly on both hardware classes when examining the order of fastest to slowest. However, on the Desktop, \inl{wasmer} has a greater lead on \inl{wasmtime} than on the Pi. Both of these runtimes perform with higher fluctuations than \inl{wamr}, which has a very consistent behaviour.
+
+\inl{wasmer} likely takes the lead here, because we configured it to use the \inl{LLVM} compiler toolchain which produces high-quality native code and can be opened by the runtime with a fast \inl{dlopen} call. On the other hand, \inl{wamrc} also uses \inl{LLVM} for ahead-of-time compilation, but performs worse. One contributing factor may be that the \inl{wamr} API does not allow us to thread-safely initialize the module once and run it often. The module needs to be instantiated from the raw bytes on every \inl{run} call. Because of that, the implementation is less efficient compared to the other executors. However, ... we will run an evaluation for that later -- comparing instantiation times of the Wasm executors.
+\inl{wasmtime} is configured to use the \inl{cranelift} JIT compiler. Because of the inherent trade-off such a compiler has to make between compilation speed and code quality, it is perhaps unsuprising that it is less performant than the \inl{LLVM}-based wasmer compiler. Interestingly, it does perform better than \inl{wamr}.
+
+To get a more isolated picture of the container runtimes performance, we test the workloads separately on our Desktop machine. The I/O-bound test is supposed to test the container runtimes' ability to handle concurrent network requests. As we've explored in chapter \ref{chapter:background}, serverless functions are frequently used with external services, such as databases. This test emulates this behaviour by blocking for 300ms, implemented using a simple thread sleep. In the Wasm executors, this is implemented with the capabilities, which allows the Wasm runtimes to supply native host functions as imports to the module. In this instance, we create our action using \inl{--annotation net\_access true} with the \inl{wsk} cli. The Wasm executor then provides the \inl{http.get} function as an import to the module. Each executor implements this with the aforementionend \inl{sleep}. The module can then use these functions as if they were part of the module. This way, we could easily implement an actual HTTP GET request. However, the lack of interface types means the module can only call native functions with integer parameters and return values, such that the practical use is still inhibited.
 
 \begin{figure}
     \begin{center}
@@ -161,7 +178,7 @@ To get a more isolated picture of the container runtimes performance, we test th
     \label{fig:pc-load-block}
 \end{figure}
 
-This test is executed with Apache JMeter\footnote{\url{https://jmeter.apache.org/}}, a load testing tool. Cold starts should not affect this test, so a warmup phase is executed before gathering data, which lets OpenWhisk create the containers and keep them in-memory; »warm«. The throughput on a non-edge device is plotted in figure \ref{fig:pc-load-block}. OpenWhisk imposes the same 4 container limit for all container runtimes, which puts a limit on the throughput for I/O-bound workloads. The relative differences between both container runtimes can be seen, regardless. Overall, they perform very similarly, with the Wasm executors completing a slightly greater number of requests per second. On average, the Wasm executors are 15\% (\inl{wamr}) and 16\% (\inl{wasmer}, \inl{wasmtime}) faster than Docker.
+Cold starts should not affect this test, so a warmup phase is executed before gathering data, which lets OpenWhisk create the containers and keep them in-memory; »warm«. The throughput on a non-edge device is plotted in figure \ref{fig:pc-load-block}. OpenWhisk imposes the same 4 container limit for all container runtimes, which puts a limit on the throughput for I/O-bound workloads. The relative differences between both container runtimes can be seen, regardless. Overall, they perform very similarly, with the Wasm executors completing a slightly greater number of requests per second. On average, the Wasm executors are 15\% (\inl{wamr}) and 16\% (\inl{wasmer}, \inl{wasmtime}) faster than Docker.
 
 \begin{figure}
     \begin{center}
@@ -171,4 +188,12 @@ This test is executed with Apache JMeter\footnote{\url{https://jmeter.apache.org
     \label{fig:pc-load-hash}
 \end{figure}
 
-In figure \ref{fig:pc-load-hash} is the result of the fully CPU-bound load test. This test shows a larger difference between the Wasm executors compared to previous tests. On average, the Wasm executors process only 38\% (\inl{wamr}), 59\% (\inl{wasmtime}) and 84\% (\inl{wasmer}) of the throughput that Docker achieves.
+In figure \ref{fig:pc-load-hash} is the result of the fully CPU-bound load test. This test shows a large performance gap among the Wasm executors, but also to Docker. On average, the Wasm executors process only 39\% (\inl{wamr}), 57\% (\inl{wasmtime}) and 88\% (\inl{wasmer}) of the throughput that Docker achieves.
+
+Docker was particularly hard to evaluate for this workload. OpenWhisk -- at least in the standalone version -- is hardly able to saturate the CPU, because the system will not create enough containers to fully utilize the CPU.
+This likely occurrs because each container is run with the \inl{--cpu-shares} Docker option, limiting the share of the CPU the container is allowed use. Hence, if not enough containers are created, some invocations have to wait for others to complete, even though the CPU isn't fully utilized.
+By increasing the concurrency limit, we can work around that and let OpenWhisk execute actions in the same container to fully leverage the assigned CPU shares. Increasing this limit too much, forces more actions to share the same CPU shares, while not creating new containers.
+However, increasing the memory on the container, which in turn makes OpenWhisk increase the CPU shares, does not have a positive effect either. Rather, it delays OpenWhisk's decision to create new containers even longer, resulting in even poorer performance. After some trial and error we arrived at values which seemed to leverage the CPU rather well, the default 256 MB of memory and the concurrency limit set to 3.
+The Wasm executors showed no such signs, simply because no memory or CPU limiting is implemented in the first place. This will have to be a feature of a fully production-ready Wasm executor, however.
+
+Cold start latencies and resource costs for keeping containers warm are ignored in this test. With that in mind, the test shows that for a steady stream of highly concurrent CPU-bound requests, using Docker is the best option. In particular, if the container is likely to be reused many times. This comes perhaps not unsuprisingly, given that the code executing is Rust compiled to a native \inl{x86_64} binary. There is hardly a way to generate faster code. In fact, if we compare the pure execution time of our wasm action outside the serverless context, we see the native binary being even faster. Here we precompile our action for wasmer and then measure only the pure function execution time, without the setup of necessary contexts. In that case, wasmer achieves 60\% of the throughput compared to the native binary. Compared to the 88\% from above, it indicates that OpenWhisk is unable to fully utilize the CPU, either because of the discussed configuration or because of internal overhead, like queuing and container management. 
