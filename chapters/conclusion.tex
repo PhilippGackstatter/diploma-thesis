@@ -7,6 +7,8 @@
 
 Other attempts for speeding-up serverless have been successful, but didn't catch on. We assume this is due to custom-written application frameworks that aren't industry-proven. This is different in our case, since the public-facing interface that serverless developers need to interact with is WebAssembly, whose adoption rate is increasing.
 
+Two difference actions need two different containers in docker terms. With the Wasm executor, too, but the containers are much lighter weight and can be kept around at less resource costs.
+
 \citeauthor{Shahrad2020} have found that, on average, 50\% of functions execute for more than 1s, that 80\% of functions execute for more than 100ms, and 9X\% of functions execute for more than 10ms (or similar, perhaps need to do the actual calculations on the data set). Thus our cold start latencies are not on the same order of magnitude as 9X\% of function execution times, but faster.
 
 What requests per second can a raspberry handle, how much for a EC2 instance (or similar)? Can we scale up horizontally, vertically?
