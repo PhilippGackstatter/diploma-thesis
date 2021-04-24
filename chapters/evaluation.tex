@@ -98,9 +98,7 @@ We run our evaluation on an edge device as well as a \inl{x86\_64} desktop machi
 
 Due to difficulties in deploying OpenWhisk on the ARM64-based Raspberry Pi with Kubernetes and ansible, we use the standalone Java version for evaluation. Since we are not benchmarking OpenWhisk itself, but rather the underlying container technology, we do not believe this to be a threat to validity. The standalone version uses OpenWhisk's \emph{lean} components for internal messaging and load balancing. These are components written specifically for deployment on resource-constrained devices.
 
-\section{Test results}
-
-\subsection{Cold Start}
+\section{Cold Start}
 
 The first version of the test created an action called \inl{hash} (our CPU-bound workload), and then runs concurrent requests against it. In the result we noticed that for 5 and more concurrent requests, there are only 4 cold starts. OpenWhisk will only create 4 containers and lets other requests wait until one of the currently executing ones finishes, so it can reuse the container. This is a fair optimization, but it does not let us test how 5 or more concurrent cold starts actually affect each other. So, instead of creating just one action, we create $N$ actions with different names but the same code. That forces OpenWhisk to execute them in different containers. However, it will still only allocate 4 containers at a time, waiting for one of them to complete before removing it and starting the next. Thus, the performance of the container removal operation also becomes important, as it blocks the provisioning of the next. It is implicitly part of the cold start time as we define it, since a container that needs to wait due to a slow remove operation from another container will have a higher \inl{waitTime}.
 % This isn't reflected in the cold start latency, but we can look at the \inl{waitTime} annotation of OpenWhisk's activation record instead. It measures how long the activation spent waiting in OpenWhisk's queues. If the removal operation of Wasm runtimes is shorter than dockers, then Wasm action activations should have to spend less time waiting than their docker counterparts. Although, this value would also be affected by longer cold starts, so it can only provide a partial answer to this question.
@@ -137,7 +135,7 @@ These comparisons give a good holistic picture of the performance of both runtim
 % how many runs is data based on?
 % use a 30MB or sth module to test WAMR impl performance then
 
-\subsection{Throughput}
+\section{Throughput}
 
 \begin{figure}
     \begin{center}
@@ -196,9 +194,24 @@ By increasing the concurrency limit, we can work around that and let OpenWhisk e
 However, increasing the memory on the container, which in turn makes OpenWhisk increase the CPU shares, does not have a positive effect either. Rather, it delays OpenWhisk's decision to create new containers even longer, resulting in even poorer performance. After some trial and error we arrived at values which seemed to leverage the CPU rather well, the default 256 MB of memory and the concurrency limit set to 3.
 The Wasm executors showed no such signs, simply because no memory or CPU limiting is implemented in the first place. This will have to be a feature of a fully production-ready Wasm executor, however.
 
-Cold start latencies and resource costs for keeping containers warm are ignored in this test. With that in mind, the test shows that for a steady stream of highly concurrent CPU-bound requests, using Docker is the best option. In particular, if the container is likely to be reused many times. This comes perhaps not unsuprisingly, given that the code executing is Rust compiled to a native \inl{x86_64} binary. There is hardly a way to generate faster code. In fact, if we compare the pure execution time of our wasm action outside the serverless context, we see the native binary being even faster. Here we precompile our action for wasmer and then measure only the pure function execution time, without the setup of necessary contexts. In that case, wasmer achieves 60\% of the throughput compared to the native binary. Compared to the 88\% from above, it indicates that OpenWhisk is unable to fully utilize the CPU, either because of the discussed configuration or because of internal overhead, like queuing and container management. 
+Cold start latencies and resource costs for keeping containers warm are ignored in this test. With that in mind, the test shows that for a steady stream of highly concurrent CPU-bound requests, using Docker is the best option. In particular, if the container is likely to be reused many times. This comes perhaps not unsuprisingly, given that the code executing is Rust compiled to a native \inl{x86\_64} binary. There is hardly a way to generate faster code. In fact, if we compare the pure execution time of our wasm action outside the serverless context, we see the native binary being even faster. Here we precompile our action for wasmer and then measure only the pure function execution time, without the setup of necessary contexts. In that case, wasmer achieves 60\% of the throughput compared to the native binary. Compared to the 88\% from above, it indicates that OpenWhisk is unable to fully utilize the CPU, either because of the discussed configuration or because of internal overhead, like queuing and container management. 
 
 Note that using native code in serverless functions is not a particularly popular approach. According to \citeauthor{Eismann2021}, the overwhelming share of serverless functions is implemented in interpreted languages such as JavaScript (42\%) and Python (42\%) \cite{Eismann2021}. Data from dashbird.io\footnote{\url{https://dashbird.io/}}, a serverless monitoring tool, coroborrates the assumption that interpreted languages are dominant. Of their 3000+ users, 76\% use JavaScript, 13\% use Python and 8\% use Java \cite{Rehemaegi2019}.
 This has two implications. One is, that high performance functions can be considered a niche application in serverless. If this were not the case, we would likely see a higher share of compiled languages. Although a language like Python can be extended with modules written in C, the dashbird data in particular indicates that JavaScript-level performance is mostly good enough.
 The other is, if we can be as fast as these interpreted or JIT-ed languages, we are not suffering from a loss in performance and, if we can be even faster than those, we already have net performance gains to report. Thus, from that perspective, a fully CPU-bound WebAssembly program reaching 88\% of the throughput of a native binary is already an achievement.
 % To put this into more perspective, we run a experiment that runs a workload in \inl{node.js}, arguably the go-to serverless runtime, and in WebAssembly. To that end, we write a function in AssemblyScript\footnote{\url{https://www.assemblyscript.org}}, a strict variant of TypeScript. We can then compile the same function with a TypeScript compiler for the \inl{node.js} runtime and one for our Wasm executors. This also shows a very practical way, how developers could utilize these WebAssembly executors: Simply use their existing TypeScript functions and compile them to WebAssembly. The assumption is, that a precompiled WebAssembly binary should offer much higher performance than the JIT-based \inl{node.js}.
+
+\section{Resource Usage}
+
+This test aims to evaluate, what the resource costs are for keeping actions in memory and ready for execution.
+To that end, we run our cold start test again, and measure the amount of memory for each container once the actions have finished execution, but before OpenWhisk removes them. At this point, Docker containers have been paused by OpenWhisk. We use the memory usage output of \inl{docker stats} for each container as the basis for evaluation. For the Wasm executors we read the resident set size (rss) of the entire process. Hence, we also measure the overhead of the web framework we run on, but also the Wasm runtimes' objects which are instantiated globally, such as \inl{Engine}s. We divide the measured amount by the number of containers that are kept alive at that point, to get an estimated memory usage for each container. The amount of memory consumed when idling, i.e. after startup, are 7.07 MiB for \inl{wasmtime}, 4.23 MiB for \inl{wamr} and 5.28 MiB for \inl{wasmer}.
+
+\begin{figure}
+    \begin{center}
+        \input{figures/pc-memory-hash.pgf}
+    \end{center}
+    \caption{The memory usage of Docker and Wasm container runtimes.}
+    \label{fig:pc-memory-hash}
+\end{figure}
+
+The measurements are in figure \ref{fig:pc-memory-hash}. We use our previously introduced \inl{hash} module, which comes at a size of 1.51 MiB in its original wasm form, i.e. before precompilation. For the Wasm executors, we expect the amount of memory consumed to depend primarily on the size of the Wasm module. For comparison we create another module with a larger size to determine whether the relationship is in fact proportional. (todo)
