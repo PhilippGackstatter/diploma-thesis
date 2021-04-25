@@ -38,14 +38,13 @@ Cold starts are an issue for latency-sensitive applications, where additional hu
 
 \subsection{Serverless Edge Computing}
 
-With the growing number of IoT devices, we're \quot{entering the post-cloud era}, as \citeauthor{Shi2016} write. The edge computing paradigm promises to be a solution to the massive amounts of data that will be generated at the edge. A wearable body sensor measuring health data for example, can use the wearer's smartphone (edge device) for data processing rather than sending the workload all the way to the cloud. In general, edge devices are resources that sit between the data source and the cloud. This processing close to the data source has a number of advantages, such as enabling low latency response times as well as working with privacy-sensitive data. This is necessary, since sending all data to the cloud has comparably higher latency and puts more strain on the network \cite{Shi2016}.
+With the growing number of IoT devices, we're \quot{entering the post-cloud era}, as \citeauthor{Shi2016} write. The edge computing paradigm promises to be a solution to the massive amounts of data that will be generated at the edge. A wearable body sensor measuring health data for example, can use the wearer's smartphone (edge device) for data processing rather than sending the workload all the way to the cloud. In general, edge devices are machines that sit between the data source and the cloud. This processing close to the data source has a number of advantages, such as enabling low latency response times as well as working with privacy-sensitive data. This is necessary, since sending all data to the cloud has comparably higher latency and puts more strain on the network \cite{Shi2016}.
 
-One piece of the puzzle towards realizing this paradigm, is serverless edge computing. \citeauthor{Aslanpour2021} lay out the vision for serverless edge computing, of which we want to highlight a few.
+One piece of the puzzle towards realizing this paradigm, is serverless edge computing. \citeauthor{Aslanpour2021} lay out the vision for serverless edge computing, of which we highlight two points.
 
 \begin{itemize}
-    \item Due to IoT devices' unpredictable workload, an under- or overprovisioning of static resources such as VMs or containers is likely. Serverless with its ability to scale to zero (even with above's caveat) provides more precise provisioning of resources and only incurs cost when used, bringing advantages for operator and user, respectively. In an energy-constrained setting such as on single-board computers (SBC) executing serverless workloads, this becomes doubly-important.
-    \item IoT architectures are usually event-driven, making them a perfect fit for serverless, as already described above.
-    \item Serverless computing tends to be used for unpredictable, bursty workloads that require immediate up-scaling. The event-driven nature of IoT applications fits this pattern well \cite{Aslanpour2021}.
+    \item Due to IoT devices' unpredictable workload, an under- or overprovisioning of static resources such as VMs or containers would be likely. Serverless with its ability to scale to zero (even with above's caveat) provides more precise provisioning of resources and only incurs cost when used, bringing advantages for operator and user, respectively. Executing serverless workloads in an energy-constrained setting, such as on single-board computers (SBC), this becomes doubly-important.
+    \item Serverless computing tends to be used for unpredictable, bursty workloads that require immediate up-scaling. Application architectures for IoT devices are usually event-driven and often unpredictable, making them a perfect fit for serverless \cite{Aslanpour2021}.
 \end{itemize}
 
 Serverless computing can be the enabler for edge computing. But some of its original design decisions need to be reexamined, as \citeauthor{Nastic2018} point out, due to the
@@ -54,7 +53,7 @@ Serverless computing can be the enabler for edge computing. But some of its orig
     \quot{[...] inherently different nature of Edge infrastructure, for example, in terms of available resources, network, geographical hyper-distribution, very large scale, etc. \cite{Nastic2018}}
 \end{quote}
 
-This motivates our work to reexamine one of the fundamental building blocks of serverless computing, in order to close a gap towards the vision of serverless edge computing.
+IBM has reacted to these changed requirements and introduced Edge Functions on the IBM Cloud Internet Services. This offering allows developers to run code closer to the user by deploying functions to their edge network. As a consequence of the resource constraints of edge devices, their offering uses the JavaScript V8 engine and its isolates feature. This is a similar step as moving to a WebAssembly executor, i.e. using a less costly sandboxing mechanism than containers to account for the resource constraints on the edge. Some of their serverless edge computing use cases include »personalized user experiences through conditional routing and originless responses« or increased API responsiveness through aggregation and caching from multiple cloud-based API endpoints \cite{Farid2019}.
 
 \section{Serverless workload}
 \label{section:serverless_workload}
