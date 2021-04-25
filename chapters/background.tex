@@ -89,23 +89,25 @@ They find 69\% of the applications have a data volume of less than 10 MB. Thus, 
 % - Finally, speed is also important (whole reason why asm.js was made in the first place)
 % - to use outside of the browser, need a interface to the OS, the task that is done by the browser on the web platform
 
-For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform and its growing number of APIs, more and more complex web apps were written. Sometimes in other programming languages. Necessarily, these languages had to use JavaScript as a target format, like Java bytecode or machine-level assembly in order to run on the web. Of course, JavaScript wasn't designed for this and so performance was lacking.
+For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform and its growing number of APIs, more and more complex web apps were written and sometimes in other programming languages. Necessarily, these languages had to treat JavaScript as a target format, like Java bytecode or machine-level assembly, in order to run on the web. Of course, JavaScript wasn't designed for this and so performance was lacking.
 
-In 2013 a solution to this problem was introduced by engineers at Mozilla, aptly named \inl{asm.js}. It restricts itself to the parts of JavaScript that can be optimized ahead-of-time \cite{Herman2014}. Thus it might be used to compile a C/C++ program to the \inl{asm.js} target format to execute it faster with a JavaScript runtime than the equivalent JavaScript program would be. Benchmarks even showed it to run no more than 1.5x slower than native code \cite{Zakai2013}.
+In 2013 a solution to this problem was introduced by engineers at Mozilla, aptly named \inl{asm.js}. It restricts itself to the parts of JavaScript that can be optimized ahead-of-time \cite{Herman2014}. It might be used to compile a C/C++ program to the \inl{asm.js} target format to execute it faster with a JavaScript runtime than the equivalent JavaScript program would be. Benchmarks even showed it to run no more than 1.5x slower than native code \cite{Zakai2013}.
 
-Finally, WebAssembly (Wasm) was born out of \inl{asm.js} in 2015, with more layers of optimization. It is a portable and universal binary instruction format for memory-safe, sandboxed execution in a virtual machine.
+Finally, WebAssembly (Wasm) was born out of \inl{asm.js} in 2015, with more layers of optimizations. It is a portable and universal binary instruction format for memory-safe, sandboxed execution in a virtual machine.
 It is possible to write programs in a variety of languages like C, C++, Rust, AssemblyScript, C\#, Go, Swift and many more, and compile them to Wasm, which finally relieves JavaScript of its role as the universal target format of the web \cite{W3C2020}.
 
 % Since it is a bytecode format independent from JavaScript, it requires a separate runtime and sandboxing mechanism.
 
 \subsection{Performance}
 
-Compared to \inl{asm.js}, the Wasm binary format is smaller in size (10-20\%) and faster to parse (by an order of magnitude)
+Compared to \inl{asm.js}, the Wasm binary format is smaller in size (10-20\%) and faster to parse, by an order of magnitude
 \cite{Clark2019}. It is 33\% faster than \inl{asm.js} on average \cite{Haas2017}.
 \citeauthor{NotSoFast} ran the PolyBenchC benchmark suite to compare Wasm to native code and found that 13 of the 24 benchmarks performed within 10\% of native code. However, they argue that the roughly 100 lines of code long benchmarks are not fully representative of typical use cases. They run the SPEC CPU benchmark suite, which are significantly larger POSIX applications. On average, they find Wasm to be slower than native by 1.55\times in Firefox and 1.45\times in Chrome \cite{NotSoFast}.
 % Not representative, if we precompile to native code, but may be relevant if we choose to also evaluate the Wasm runtimes JIT modes
-Wasm modules tend to be smaller than native x86-64 binaries. On average, Wasm modules have 85\% of the size.
-\cite{Haas2017}.
+Wasm modules tend to be smaller than native x86-64 binaries. On average, Wasm modules have 85\% of the size \cite{Haas2017}.
+
+Serverless functions, by design, are microservices and thus limited in scope. The PolyBenchC benchmark results are thus likely more representative than the SPEC suite.
+To increase performance and startup time, Wasm modules can be compiled to native code, either by JIT engines at the time of execution, or ahead-of-time by the same JIT engines or AoT compilers. This process produces an artifact specific to the WebAssembly runtime that compiled it. At this point, the universality of the Wasm format is lost. Doing the translation to native code ahead-of-time means the compilation process does not take up time when we need to execute. Consequently, this is an interesting technique to reduce the time it takes to get a WebAssembly module ready for execution.
 
 % How relevant is native speed actually for the serverless context -- examine in later chapter?
 
@@ -124,9 +126,11 @@ Wasm defines two important goals for security.
 
 To that end, Wasm uses fault isolation techniques to sandbox the executing module. Interaction with the host environment is only possible through imported functions \cite{W3C2020}. This mechanism represents a \quot{safe foreign function interface} as it can communicate with the outside environment, but not escape the sandbox \cite{Haas2017}.
 
-In Wasm, heap allocations allocate in its linear memory. This memory is separate from the code space, which prevents programs from overwriting instructions. Programs can only operate in their own execution environment, but cannot escape. This means Wasm runtimes can safely execute multiple untrusted modules, with their own linear memories, in the same process memory space and without requiring additional isolation \cite{Haas2017}. This is a key aspect that enables Wasm as a lightweight container technology. Only a single instance of a runtime is needed to execute many (serverless) functions.
+In Wasm, all memory access is confined to a module's \emph{linear memory}. This memory is separate from the code space, which prevents programs from overwriting instructions. Programs can only operate in their own execution environment, but cannot escape. This means Wasm runtimes can safely execute multiple untrusted modules, with their own linear memories, in the same process memory space and without requiring additional isolation \cite{Haas2017}. In particular, »Reading and writing to arbitrary memory locations cannot be expressed in WebAssembly«, because Wasm's memory instructions work with offsets rather than addresses. Furthermore, bounds checking at runtime ensures the instructions write only to the linear memory \cite{Denis2019}.
+This is a key aspect that enables Wasm as a lightweight container technology. Only a single instance of a runtime is needed to execute many (e.g. serverless) functions.
 
-Wasm also features control-flow integrity because it enforces structured control flow. Jump targets and other properties are validated in a single-pass before a module is instantiated. In particular, validation prevents jumps from targeting arbitrary locations. This validation must happen before a module is executed by a runtime \cite{Haas2017}.
+In the assembly produced by compiling a C program the call to a function is expressed as jumping to the address of the function's first instruction. In exploits of such programs, these addresses are often crafted or changed by malicious actors to take control of the program's control flow. In WebAssembly on the other hand, a function is represented as an index in a table, i.e. it introduces an additional level of indirection to express the address. That adds to security, since an arbitrary address to a Wasm function cannot be crafted with Wasm instructions \cite{Denis2019}. And since the program's memory is separate from the function instructions, an attacker also cannot overwrite them.
+Wasm thus features control flow integrity, because it enforces structured control flow. Jump targets and other properties are validated in a single pass before a module is instantiated. In particular, validation prevents jumps from targeting arbitrary locations. This validation must happen, according to the Wasm spec, before a module is executed by a runtime \cite{Haas2017}.
 
 With both performance and security under its belt as well as being a portable and universal target format, Wasm turns out to be useful not just in the browser, but also outside of it.
 
