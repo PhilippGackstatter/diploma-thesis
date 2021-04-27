@@ -36,57 +36,7 @@ Finding a suitable serverless framework that we can modify and integrate with, w
 
 We use Apache OpenWhisk as the framework to implement WebAssembly support for. OpenWhisk is a production-ready framework, used as the basis for IBM's Cloud Functions. Thus, implementing Wasm support in OpenWhisk would show the viability of the approach in the real world. The framework is also frequently used by serverless researchers to implement new ideas such as pause containers to reduce cold start times \cite{Mohan2019} or Wasm support via \inl{node.js} \cite{Hall2019}, making it a well-respected and frequently used framework. OpenWhisk also has \emph{lean} components, which are lighter-weight replacements for its heavier ones, such as Kafka. These enable OpenWhisk to be deployed on edge devices, such as Raspberry Pis, on which we plan to evaluate our implementation. Furthermore, because OpenWhisk is already designed to be easily extensible with new language runtimes, the protocol is straightforward to implement.
 
-\section{WebAssembly runtimes}
-\label{section:wasm-runtimes}
 
-WebAssembly is a specification\footnote{\url{https://webassembly.org/specs/}} and implementations adhering to this spec are WebAssembly runtimes. Since Wasm was originally designed for the web, the virtual machines of browsers, such as Google's V8 or Mozilla's SpiderMonkey, can also execute WebAssembly in addition to JavaScript. With the rise of Wasm outside the Web, a large number of standalone runtimes have emerged and many are actively being developed. This section will introduce a number of runtimes with different execution models, and justify our choice of runtimes to implement in our executor.
-
-
-\subsection{Wasmtime}
-
-Wasmtime\footnote{\url{https://github.com/bytecodealliance/wasmtime}} is a runtime that has support for Just-in-Time compilation, available for the x86\_64 and aarch64 instruction set architectures (ISA). It is written in Rust and thus easily embeddable from there. Support for the latest WASI standards and future proposals for Wasm are implemented.
-It is developed as part of the Bytecode Alliance\footnote{\url{https://bytecodealliance.org/}}, with founding members like Mozilla, fastly, Intel and RedHat. The \inl{cranelift} code generator is developed as part of the alliance and \inl{wasmtime} uses it for Just-in-Time compilation. The code generator's documentation points out that the backend for \inl{x86\_64} is »the most complete and stable; other architectures are in various stages of development \cite{Alliance2021}.« 
-Thus it will most likely run on an \inl{aarch64} Raspberry Pi, but performance may not be on-par with an \inl{LLVM}-based runtime.
-
-\subsection{Lucet}
-
-Lucet\footnote{\url{https://github.com/bytecodealliance/lucet}} is the compiler and runtime used for cloud provider fastly's Terrarium, a platform for running WebAssembly on edge devices \cite{fastly2019}. It consists of a compiler and a runtime to execute WebAssembly. The compiler, \inl{lucetc}, compiles Wasm modules to native object or shared object files. The complementary \inl{lucet-runtime} can then load the native code and call the contained Wasm functions. Because of this compilation model, execution can reach near-native speeds. However, the execution is not sandboxed by default, requiring mechanisms like \inl{seccomp-bpf}\footnote{\url{https://wiki.mozilla.org/Security/Sandbox/Seccomp}}, and the security model is actively being developed. It is currently only available on the \inl{x86\_64} ISA. Since we require support for edge devices, typically built on the arm ISA, we will not be using \inl{lucet}. Furthermore, the lack of mature sandboxing makes other runtimes a better choice.
-
-\subsection{Wasmer}
-
-Wasmer\footnote{\url{https://github.com/wasmerio/wasmer}} is a WebAssembly runtime with support for the three major platforms and \inl{x86\_64} and \inl{aarch64} ISAs. Notably, wasmer has already reached version \inl{1.0}, indicating a certain level of maturity. The runtime offers three different compilers, \inl{singlepass}, \inl{cranelift} and \inl{LLVM}, whose compilation times get slower and execution times get faster, in that order, respectively. The runtime has a JIT and a native engine, which differ in the way the module is loaded. In particular, the native engine produces a shared object, which can be loaded with a fast \inl{dlopen} call. The support for high-quality AoT compilation with \inl{LLVM} and fast startup times makes wasmer a promising choice for our purpose.
-
-\subsection{WASM3}
-
-Due to Wasm's simplicity in the binary format, there is wide-spread interest for running it on embedded devices. An example of that is \inl{wasm3}\footnote{\url{https://github.com/wasm3/wasm3}}, a Wasm interpreter that claims to be the fastest. They argue in favor of interpretation over JIT or AoT compilation, since startup latency is more important in many situations. Furthermore, portability and security are easier to achieve with this approach and development with the virtual machine is simpler. Still, a performance penalty of 4 to 5x compared to JIT or 12x compared to native execution, leads us to believe that no amount of startup latency gain can make up for the performance loss. Even though our primary goal is that of reducing the cold start latency, the execution that follows cannot massively lack behind Docker containers, if adoption is to succeed. The relationship between startup and execution performance is too far out of balance in this case.
-
-\subsection{WebAssembly Micro Runtime}
-
-However, there is still value in runtimes written specifically for embedded devices. The WebAssembly Micro Runtime\footnote{\url{https://github.com/bytecodealliance/wasm-micro-runtime/}} (\inl{wamr}) has support for all three mentioned execution modes. It has low memory usage and binary size. For example, the claimed binary size of the AoT runtime is just 50 kilo bytes. Further, the AoT runtime claims near-native speed. For execution on edge devices, where memory is scarce, this runtime may allow more modules to be kept in-memory compared to heaver-weight runtimes.
-
-A summary of the runtimes we looked at can be found in table \ref{table:wasm-runtime-overview}. The diversity of execution modes sticks out -- clearly no single mode is the best for all scenarios. Except for \inl{lucet}, all runtimes have good platform support. However, particularly for edge devices, the lack of support for the 32-bit arm architecture can be challenging in the Rust-written runtimes (\inl{wasmtime}, \inl{wasmer}, \inl{lucet}). The support in the other ones, written in C, is there.
-
-\newcommand{\linux}{\input{icons/linux.pdf_tex}}
-\newcommand{\macos}{\input{icons/macos.pdf_tex}}
-\newcommand{\windows}{\input{icons/windows.pdf_tex}}
-\newcommand{\freebsd}{\input{icons/freebsd.pdf_tex}}
-\newcommand{\android}{\input{icons/android.pdf_tex}}
-\newcommand{\ios}{\input{icons/ios.pdf_tex}}
-
-\begin{table}[h!]
-    \centering
-    \begin{tabular}{c | c | c | c}
-        Runtime        & ISA support & Execution modes  & Platform support\\
-        \hline
-        \inl{wasmtime} & \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
-        \inl{lucet}    & \inl{x86\_64} & AoT & \linux, \macos\\
-        \inl{wasmer}   & \inl{x86}, \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
-        \inl{wasm3}    & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{RISC-V}, ...  & Interpreted      & \linux, \macos, \windows, \freebsd, \android, \ios\\
-        \inl{wamr}     & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{aarch64}, ... & AoT, Interpreted & \linux, \macos, \windows, \android, ... \\
-    \end{tabular}
-    \caption{WebAssembly runtime feature overview.}
-    \label{table:wasm-runtime-overview}
-\end{table}
 
 \section{WebAssembly in OpenWhisk}
 
@@ -167,6 +117,58 @@ In figure \ref{fig:wasm-openwhisk-action-invocation-flow} we have sketched the h
 In OpenWhisk's Docker container implementation, OpenWhisk only uses the Docker daemon to create a container, but then communicates with the container directly. In our implementation, every request is proxied through the Wasm executor. The advantage is, that not every Wasm module needs to implement the OpenWhisk protocol, which requires an HTTP server, which would both increase the module's size and its runtime overhead. The disadvantage is the single point of failure. That is offset by the bigger picture of OpenWhisk, where in a truly resilient deployment, we already have multiple Invokers. A failing Wasm executor would let the entire Invoker unit fail, but others could potentially take over in that scenario. That also presupposes, that the Wasm executor can handle a potentially large amount of requests.
 
 The executor also needs to be fast in general, in order to aid in alleviating the cold start problem. That includes efficient handling of receiving the module's code from OpenWhisk, instantiating it and setting up the underlying Wasm executor. In order to enable execution on all kinds of platforms, including edge devices, another requirement for a useful Wasm executor is its ability to run on different instruction set architectures.
+
+\section{WebAssembly runtimes}
+\label{section:wasm-runtimes}
+
+WebAssembly is a specification\footnote{\url{https://webassembly.org/specs/}} and implementations adhering to this spec are WebAssembly runtimes. Since Wasm was originally designed for the web, the virtual machines of browsers, such as Google's V8 or Mozilla's SpiderMonkey, can also execute WebAssembly in addition to JavaScript. With the rise of Wasm outside the Web, a large number of standalone runtimes have emerged and many are actively being developed. This section will introduce a number of runtimes with different execution models, and justify our choice of runtimes to implement in our executor.
+
+
+\subsection{Wasmtime}
+
+Wasmtime\footnote{\url{https://github.com/bytecodealliance/wasmtime}} is a runtime that has support for Just-in-Time compilation, available for the x86\_64 and aarch64 instruction set architectures (ISA). It is written in Rust and thus easily embeddable from there. Support for the latest WASI standards and future proposals for Wasm are implemented.
+It is developed as part of the Bytecode Alliance\footnote{\url{https://bytecodealliance.org/}}, with founding members like Mozilla, fastly, Intel and RedHat. The \inl{cranelift} code generator is developed as part of the alliance and \inl{wasmtime} uses it for Just-in-Time compilation. The code generator's documentation points out that the backend for \inl{x86\_64} is »the most complete and stable; other architectures are in various stages of development \cite{Alliance2021}.« 
+Thus it will most likely run on an \inl{aarch64} Raspberry Pi, but performance may not be on-par with an \inl{LLVM}-based runtime.
+
+\subsection{Lucet}
+
+Lucet\footnote{\url{https://github.com/bytecodealliance/lucet}} is the compiler and runtime used for cloud provider fastly's Terrarium, a platform for running WebAssembly on edge devices \cite{fastly2019}. It consists of a compiler and a runtime to execute WebAssembly. The compiler, \inl{lucetc}, compiles Wasm modules to native object or shared object files. The complementary \inl{lucet-runtime} can then load the native code and call the contained Wasm functions. Because of this compilation model, execution can reach near-native speeds. However, the execution is not sandboxed by default, requiring mechanisms like \inl{seccomp-bpf}\footnote{\url{https://wiki.mozilla.org/Security/Sandbox/Seccomp}}, and the security model is actively being developed. It is currently only available on the \inl{x86\_64} ISA. Since we require support for edge devices, typically built on the arm ISA, we will not be using \inl{lucet}. Furthermore, the lack of mature sandboxing makes other runtimes a better choice.
+
+\subsection{Wasmer}
+
+Wasmer\footnote{\url{https://github.com/wasmerio/wasmer}} is a WebAssembly runtime with support for the three major platforms and \inl{x86\_64} and \inl{aarch64} ISAs. Notably, wasmer has already reached version \inl{1.0}, indicating a certain level of maturity. The runtime offers three different compilers, \inl{singlepass}, \inl{cranelift} and \inl{LLVM}, whose compilation times get slower and execution times get faster, in that order, respectively. The runtime has a JIT and a native engine, which differ in the way the module is loaded. In particular, the native engine produces a shared object, which can be loaded with a fast \inl{dlopen} call. The support for high-quality AoT compilation with \inl{LLVM} and fast startup times makes wasmer a promising choice for our purpose.
+
+\subsection{WASM3}
+
+Due to Wasm's simplicity in the binary format, there is wide-spread interest for running it on embedded devices. An example of that is \inl{wasm3}\footnote{\url{https://github.com/wasm3/wasm3}}, a Wasm interpreter that claims to be the fastest. They argue in favor of interpretation over JIT or AoT compilation, since startup latency is more important in many situations. Furthermore, portability and security are easier to achieve with this approach and development with the virtual machine is simpler. Still, a performance penalty of 4 to 5x compared to JIT or 12x compared to native execution, leads us to believe that no amount of startup latency gain can make up for the performance loss. Even though our primary goal is that of reducing the cold start latency, the execution that follows cannot massively lack behind Docker containers, if adoption is to succeed. The relationship between startup and execution performance is too far out of balance in this case.
+
+\subsection{WebAssembly Micro Runtime}
+
+However, there is still value in runtimes written specifically for embedded devices. The WebAssembly Micro Runtime\footnote{\url{https://github.com/bytecodealliance/wasm-micro-runtime/}} (\inl{wamr}) has support for all three mentioned execution modes. It has low memory usage and binary size. For example, the claimed binary size of the AoT runtime is just 50 kilo bytes. Further, the AoT runtime claims near-native speed. For execution on edge devices, where memory is scarce, this runtime may allow more modules to be kept in-memory compared to heaver-weight runtimes.
+
+A summary of the runtimes we looked at can be found in table \ref{table:wasm-runtime-overview}. The diversity of execution modes sticks out -- clearly no single mode is the best for all scenarios. Except for \inl{lucet}, all runtimes have good platform support. However, particularly for edge devices, the lack of support for the 32-bit arm architecture can be challenging in the Rust-written runtimes (\inl{wasmtime}, \inl{wasmer}, \inl{lucet}). The support in the other ones, written in C, is there.
+
+\newcommand{\linux}{\input{icons/linux.pdf_tex}}
+\newcommand{\macos}{\input{icons/macos.pdf_tex}}
+\newcommand{\windows}{\input{icons/windows.pdf_tex}}
+\newcommand{\freebsd}{\input{icons/freebsd.pdf_tex}}
+\newcommand{\android}{\input{icons/android.pdf_tex}}
+\newcommand{\ios}{\input{icons/ios.pdf_tex}}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{c | c | c | c}
+        Runtime        & ISA support & Execution modes  & Platform support\\
+        \hline
+        \inl{wasmtime} & \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
+        \inl{lucet}    & \inl{x86\_64} & AoT & \linux, \macos\\
+        \inl{wasmer}   & \inl{x86}, \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
+        \inl{wasm3}    & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{RISC-V}, ...  & Interpreted      & \linux, \macos, \windows, \freebsd, \android, \ios\\
+        \inl{wamr}     & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{aarch64}, ... & AoT, Interpreted & \linux, \macos, \windows, \android, ... \\
+    \end{tabular}
+    \caption{WebAssembly runtime feature overview.}
+    \label{table:wasm-runtime-overview}
+\end{table}
 
 \section{Executor implementation}
 
