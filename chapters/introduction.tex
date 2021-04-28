@@ -30,6 +30,8 @@ In summary, Wasm allows for secure, portable and fast execution. With these prop
 % \item In containers, the runtime for an interpreted language such as Python or JavaScript needs to be shipped. If we can compile these languages to Wasm, then no additional runtime needs to be shipped. This is code that doesn't need to be downloaded on every invocation from the database.
 % \end{itemize}
 
+% Since the edge computing paradigm is already well-aligned with cloud-based serverless computing, but lacks a solution that works well on limited resources, a solution that works well on edge devices should also be suitable for use in cloud-based environments. Serverless functions should already be as lightweight as possible in both scenarios, so the goals for both are well-aligned.
+
 This promising outlook shall be examined more closely in this work. We will implement a Wasm runtime, using different Wasm executors, in Apache OpenWhisk and compare it to the existing container runtime.
 
 \section{Aim of the Work}
