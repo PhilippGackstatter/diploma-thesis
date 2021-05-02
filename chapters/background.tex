@@ -38,6 +38,9 @@ Cold starts are an issue for latency-sensitive applications, where additional hu
 
 \subsection{Serverless Edge Computing}
 
+% https://hal.inria.fr/hal-01677622/file/449571_1_En_15_Chapter.pdf
+% They draw attention to the fact, that computational power at the edge is much more finite than the apparently finite level of computing, available at the cloud. "since anoverloaded MEC server significantly degrades user experience and negates theadvantages of MEC". Thus, virtualization and containerization cannot simply be adopted, it is not fine-grained enough. Enter serverless...
+
 With the growing number of IoT devices, we are \quot{entering the post-cloud era}, as \citeauthor{Shi2016} write \cite{Shi2016}. The edge computing paradigm promises to be a solution to the massive amounts of data that will be generated at the edge. A wearable body sensor measuring health data for example, can use the wearer's smartphone (edge device) for data processing rather than sending the workload all the way to the cloud. In general, edge devices are machines that sit between the data source and the cloud. This processing close to the data source has a number of advantages, such as enabling low latency response times as well as working with privacy-sensitive data. This is necessary, since sending all data to the cloud has comparably higher latency and puts more strain on the network.
 
 One piece of the puzzle towards realizing this paradigm, is serverless edge computing. \citeauthor{Aslanpour2021} lay out the vision for serverless edge computing, of which we highlight two points \cite{Aslanpour2021}.
