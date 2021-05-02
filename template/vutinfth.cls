@@ -723,7 +723,6 @@
   \setlength{\baselineskip}{13.6pt}%
   \setlength{\parskip}{0pt plus 1pt}%
   \begin{SFFont}{phv}%
-    \sffamily
     {\centering
       \vspace*{1.2cm}\par
       \begin{minipage}[t][5cm][b]{\textwidth}%
