@@ -3,12 +3,49 @@
 
 \section{Motivation}
 
-With the growing number of Internet of Things (IoT) devices, the limitations of today's cloud computing platforms have become apparent. Supporting low latency in use cases like data analytics and machine learning requires moving away from the cloud-centric model \cite{Nastic2017, Rausch2019}. Serverless computing, or Function-as-a-Service (FaaS), has emerged as a solution.
+% Large number of IoT devices at the edge
+% low latency and privacy sensitive use cases cannot be facilitated by the cloud
+% some examples of low lat or privacy sensitive use cases
+% in theory, serverless is a perfect fit for edge, event-driven, unpredictable
+% serverless requires no infrastructure setup from the user side, can be used whenever
+% cloud tends to be at centralized locations, far away -> higher latency through physical distance
+% cold start issue in serverless introduces significant additional latency
+% simply bringing serverless to the edge wouldn't work well because of cold start & resource requirements
+% Need a different approach for the serverless edge
+
+% Enter Wasm, containerisation but lightweight
+% Take the serverless approach, but replace the commonly used docker with Wasm
+% Can accommodate resource-constrained devices better and generally be faster
+
+% Aim of the work
+% building this container runtime and evaluating it
+
+With the growing number of Internet of Things (IoT) devices, the limitations of today's cloud computing platforms have become apparent. Low latency and data-intensive use cases cannot be facilitated by the cloud, due to its physical distance and sheer amount of data that all edge devices would have to transmit \cite{Aslanpour2021}.
+Hence, application scenarios at the edge involving data analytics \cite{Nastic2017}, machine learning \cite{Rausch2019} or augmented reality \cite{Baresi2019}, require moving away from the cloud-centric model. Serverless computing -- most commonly in the form of Function-as-a-Service (FaaS) -- has emerged as a solution.
+In this computing model, developers can execute functions without having to specify how the necessary infrastructure is set up. Instead, the allocation of computing resources is automated, which enables a higher elasticity. This property is well-suited to the resource- and energy-constrained environments of edge devices. Here, overprovisioning is even less desireable than in the cloud model \cite{Aslanpour2021}.
+Because resources can be utilized whenever required, this model is ideal for event-driven architectures, such as those typically found in IoT scenarios, where the time at which devices come online or a sensor receives input is unpredictable. Therefore, it may happen that a serverless framework gets only a few requests, but at other times, needs to process a large amount of simultaneous requests.
+To enable this elasticity, one user's function might run on the same host as that of another's. To isolate these instances, serverless frameworks make use of OS-level virtualization through containers -- usually of the Docker flavor.
+Next to security, it also enables packaging language runtimes, so developers can write functions almost language-agnostic, and statelessness due to cheap create and destroy operations. Although, cheap is relative. Historically, containers have been compared to the heavier-weight virtual machines, where the creation is indeed much more time intensive. However, on the time scale of serverless, where an incoming request ought to be finished as soon as possible but the container needs to be created first, it turns out to be not so cheap after all. Not pre-allocating resources to avoid overprovisioning is the point of serverless, but that presupposes that the allocation itself is timely.
+
+When a function is first executed, its container must be started -- referred to as the cold start. This can introduce a latency of a few hundred milliseconds to seconds \cite{Manner2018, Wang2018}. Consider that that on average, 50\% of serverless functions execute for less than one second \cite{Shahrad2020}. Thus, the latency observed by the end user can often be double of what the function itself is responsible for. This infrastructure-induced latency is unacceptable for latency sensitive applications, and thereby most user-facing ones.
+To make matters worse, these cold start latencies get worse under concurrent workloads, precisely those supposed to be well-handled by serverless platforms \cite{Mohan2019}.
+
+Once running, so-called warm containers can be reused for subsequent invocations, making those as fast as the underlying hardware offers or only limited by the language's runtime.
+
+Thus, a new approach should as fast as possible, while also greatly reducing the cold start. Essentially, another technology leap is required, similar to that from virtual machines to containers; from heavyweight to lightweight.
+
+One technology that might facilitate this leap is called WebAssembly.
+
+% The setup of the execution environment may thus contribute a significant part to the end-to-end time it takes to invoke a function for the first time. 
+
+% owever, most of these attempts are at early stages,and  architectural  and  design  assumptions  behind  such  approaches  need  to  bereevaluated, for example, to address the challenges described \cite{Nastic2018}
 
 % Expand what moving away from cloud-centric means, how to do it. Maybe \cite{Aslanpour2021}
 % Cold-start issues at serverless offerings of cloud-providers
 
-In this computing model, cloud service providers offer to execute functions written in a programming language of the developer's choice. This is most often facilitated by the use of a container technology, such as Docker. The container enables practical execution of any program, as it contains all its dependencies. Through this mechanism, it also isolates one executing function from another to securely enable multi-tenancy on shared physical hosts. While this works well on the level of Software-as-a-Service, it has problems on the finer-grained Function-as-a-Service (FaaS) level. Once containers are running, they allow execution of programs at native speeds. However, in serverless environments, the need to quickly create and destroy functions arises. When a function is first executed, its container must be started. This can introduce latency in the order of a few hundred milliseconds to seconds \cite{Manner2018, Wang2018} and quickly gets worse under concurrent workloads \cite{Mohan2019}. The setup of the execution environment may thus contribute a significant part to the end-to-end time it takes to invoke a function for the first time. This has been coined the cold-start problem.
+
+
+This is most often facilitated by the use of a container technology, such as Docker. The container enables practical execution of any program, as it contains all its dependencies. Through this mechanism, it also isolates one executing function from another to securely enable multi-tenancy on shared physical hosts. While this works well on the level of Software-as-a-Service, it has problems on the finer-grained Function-as-a-Service (FaaS) level. Once containers are running, they allow execution of programs at native speeds. However, in serverless environments, the need to quickly create and destroy functions arises. When a function is first executed, its container must be started. This can introduce latency in the order of a few hundred milliseconds to seconds \cite{Manner2018, Wang2018} and quickly gets worse under concurrent workloads \cite{Mohan2019}. The setup of the execution environment may thus contribute a significant part to the end-to-end time it takes to invoke a function for the first time. This has been coined the cold-start problem.
 % This problem has been partially addressed by keeping containers \quot{warm} in-between requests. However this is opposed to the serverless promise of being able to scale to zero.
 
 To enable low-latency edge computing on resource-constrained devices, serverless is an ideal framework. Single functions are lightweight enough to be deployed on these devices, where entire applications are not. But executing functions in container runtimes on resource-constrained devices will only exacerbate the cold-start problem. Thus, a more scalable and lightweight runtime is needed. One way to achieve this, is to replace the container runtime with one based on WebAssembly (Wasm) such as in \cite{Hall2019} and \cite{Murphy2020}. Wasm is a portable, binary instruction format for memory-safe, sandboxed execution in a virtual machine \cite{W3C2020}. Its portability means that it can be executed wherever an executor exists. Thus, a serverless computing platform only needs to provide a Wasm runtime for the instruction set architectures of its edge devices. Then, a function can be easily moved between architecturally heterogeneous devices. Its sandboxing features enables Wasm to be used for the execution of arbitrary, user-supplied code without compromising the security of a multi-tenant system. Finally, Wasm executors can be created and destroyed in a matter of microseconds. The cloud provider Fastly has recently begun offering execution of Wasm modules on its FaaS platform through the use of their \inl{lucet} executor. On their blog they write:
