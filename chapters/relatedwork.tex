@@ -1,7 +1,31 @@
 \chapter{Related Work}
 \label{chapter:relatedwork}
 
-In this chapter we will look at other approaches for reducing cold-starts.
+In this chapter we will look at approaches for reducing cold starts such as improvements to the traditional container model but also some including WebAssembly.
+
+\section{Incremental approaches}
+
+These approaches attempt to work around the limitations of OS-level virtualization with additional techniques, typically implementing some form of cache or pre-fetching. Thus, they can be seen as incremental improvements.
+
+\subsection{Pre-Warming}
+
+\citeauthor{Lin2019} implement a pooling solution for Knative, an open source platform built on Kubernetes \cite{Lin2019}. The pool pre-warms pods and maintains these in a pool. When a request comes in, instead of cold starting, a pod from the pool is migrated and used for execution. According to them, the migration takes around 2 seconds. The response to first request for a simple HTTP server example is improved by 2.3 \times, while a more complex image classifier is sped up by 5.2 \times. In absolute terms, however, the response times are still in the range of multiple seconds. Notably, this approach also includes pre-warming not just the container and language runtime, if applicable, but also the function itself. That in particular explains the large gain in the image classifier example, which needs to load its machine learning model from disk.
+
+\citeauthor{Thoemmes2017} describes the prewarming approach used in OpenWhisk. The platform operator needs to configure the prewarming system by specifying which containers are pre-created. If the anticipated load is primarily JavaScript functions, then the configured number of \inl{node.js} containers is started. In contrast to the previous approach, only the container setup itself and that of the language runtime is taken out of the hot path. Any function initialization still needs to happen during \inl{init}. Hence, the only difference between pre-warmed and warm containers is that the initialization still needs to happen before execution. The upside is that the container is generic over any potential JavaScript function, and not bound to any specific action.
+While JavaScript is interpreted or just-in-time compiled, and therefore does not add much to the initialization, for some languages, it can be much longer. As we mentioned before, the reason we used the \inl{dockerskeleton} rather than the Rust runtime is that the Rust source code needs to be compiled during the initialization. While this allows the portable source code to be compiled for any underlying hardware and then executed at native speeds, it comes with the significant compilation cost. Our approach improves on that, since WebAssembly itself is a portable, yet more efficient and compact code representation and could be executed immediately, but also compiled again for more performance.
+
+While these attempts manage to reduce the cold starts, they come at a high cost of resources. Pre-warming a sufficient amount of containers to avoid cold starts even during bursts of requests requires seizing a significant amount of memory. This is especially problematic at the edge.
+
+\subsection{Pre-Creation}
+
+One approach that alleviates cold starts while consuming only negligible amounts of resources, is proposed by \citeauthor{Mohan2019} \cite{Mohan2019}. Their approach avoids the specialization of the container for either one particular function, or the language runtime. Rather, it can be used for any container. First they analyze the core issue for the high cold start times of containers and their rise under increasing concurrency. The startup of a Docker container requires setting up its network namespace in the Linux kernel, which is responsible for more than 90\% of the startup time. The kernel uses a single global lock for this task, which is responsible for the decline in performance under concurrency. Given these findings, they propose an approach that pre-creates these namespaces using so-called pause containers. Their initialization is effectively paused after the network namespace has been created and can then be attached to a Docker container, such that both share the namespace. On top of this, they introduce a pool manager, which holds a number of pause containers from where they can be attached as needed, but also put back after the attached container terminates. Due to only requiring memory on the order of kilobytes, pre-creating a large number of pause containers is reasonable and can thus also accommodate bursty workloads. The evaluation shows a reduction in cold start time of up to 80\%. Given these numbers, this approach is a viable alternative to a more radical approach like ours, at least for the cloud and likely also on edge devices, although this has not been evaluated.
+
+% »Unfortunately, keeping containerspausedentails ahigh memory cost.«
+% \url{https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hendrickson.pdf}
+
+% Application-level isolation with docker, but function-level isolation with processes
+% reduce invocation times of call chains, but not necessarily cold starts themselves
+% https://www.usenix.org/system/files/conference/atc18/atc18-akkus.pdf
 
 \section{Cloudflare Workers}
 
@@ -11,10 +35,3 @@ Workers allow execution of JavaScript directly in an isolate as well as Rust, C 
 Similar to our approach, a lighter-weight sandboxing is introduced to cut down on the cold-start latency. This execution model eliminates the costly startup of a \inl{node.js} process, but it would still need to parse and compile the JavaScript or WebAssembly, before execution can begin.
 
 % Expand with Wasm in our OW and precompiled Wasm in our OW.
-
-\section{Pause Containers}
-
-\citeauthor{Mohan2019} ...
-
-»Unfortunately, keeping containerspausedentails ahigh memory cost.«
-\url{https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_hendrickson.pdf}
