@@ -27,6 +27,16 @@ One approach that alleviates cold starts while consuming only negligible amounts
 % reduce invocation times of call chains, but not necessarily cold starts themselves
 % https://www.usenix.org/system/files/conference/atc18/atc18-akkus.pdf
 
+\subsection{Prediction}
+
+\citeauthor{Shahrad2020} characterized the serverless workload at Microsoft Azure and use their findings to propose an improved keep-alive policy \cite{Shahrad2020}. They first point out that most systems such as OpenWhisk, but also the large cloud providers use a fixed policy, where every function's execution environment is kept alive for the same amount of time. Given their finding that there is an 8 order of magnitude difference in the frequency with which functions are called, this is can be a very wasteful policy for many of the rarely invoked functions.
+
+They characterize policies by a set of rules. One is the pre-warming window, which is the time the policy waits after an execution before pre-warming the container for the next anticipated invocation. The other is the keep-alive window, which is the time it keeps containers warm after either pre-warming or an actual execution.
+Their proposed policy works by learning and adjusting a function's invocation frequency. It uses a histogram to track the idle times of functions, from which the 5th percentile is used as the pre-warming window, and the 99th percentile used as the keep-alive time.
+Using real invocation traces as input, they simulate workloads against an implementation of their policy in OpenWhisk. The standard fixed keep-alive policy of 10 minutes in OpenWhisk shows the 75th percentile of applications cold starting 50\% of the time. When it uses the same amount of memory as the histogram-based policy it causes 2.5 times more cold starts. Overall, the histogram-based policy reduces the number of cold starts while using a minimal amount of memory.
+
+This approach is independent of the underlying container runtime. Although Wasm executors can reduce the cold start times significantly, in OpenWhisk they would still be using a fixed keep-alive policy. Evidently, there are much better approaches that reduce resource waste. While pre-warming is less important when cold starts are cheap, having a keep-alive time based on the function's invocation pattern would still reduce memory consumption sense than a fixed policy. Future work might examine this policy for Wasm executors and find a suitable percentile to choose the pre-warming window from, given that cold starts are cheaper.
+
 \section{Cloudflare Workers}
 
 Cloudflare is a cloud service provider, whose \emph{Workers} offering enables end-users to run code on its Edge Network. The Workers use Google's V8 JavaScript engine to execute that code.
