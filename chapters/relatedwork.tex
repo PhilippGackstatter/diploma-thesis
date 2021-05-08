@@ -65,6 +65,18 @@ Cloud provider fastly offers its experimental fastlylabs\footnote{\url{https://w
 Even though we did not leverage \inl{lucet} due to security concerns as well as platform and ISA support, we did use the idea of precompiling to native code ahead-of-time. This payed off, given that we measured module instantiation times of 340 microseconds to setup a \inl{wasmtime} instance from a module and would not have achieved module deserialization times of around 10 milliseconds.
 Fastly has joined the Bytecode Alliance\footnote{\url{https://bytecodealliance.org/}}, under whose umbrella \inl{wasmtime} is developed, and \inl{lucet} is being integrated into \inl{wasmtime} to provide Ahead-of-Time compilation \cite{Hickey2020}.
 
+\subsection{Faasm}
+
+\citeauthor{Shillaker2020} introduce \inl{faasm}, a serverless runtime using WebAssembly \cite{Shillaker2020}. One or more functions is executed in a \inl{faaslet}, which uses WebAssembly's software fault-isolation to restrict memory access to its own address space. Every \inl{faaslet} is run in a new thread which allows limiting CPU cycles with \inl{cgroups} and network with Linux namespaces.
+We did not provide a resource limitation since we believe our threading model to be only an intermediate solution until WebAssembly can be executed asynchronously, but it could use the same \inl{cgroup} mechanism in principle. When executing asynchronously, however, \inl{cgroups} cannot be used to limit an individual function's CPU time, which is thus an open problem.
+
+Running multiple functions together allows for memory sharing and statefulness -- an explicit goal of the runtime --  also across hosts via a state management API. Even though in traditional serverless platforms functions can be chained together, this process requires serialization which can be omitted when sharing memory directly. This is implemented on top of the Wasm memory model with \emph{shared regions}, where the linear memory of a WebAssembly instance is extended by additional pages which are mapped onto that region.
+Statefulness was not a goal of our work, given that this limitation of serverless platforms has not been a primary one for developers according to our literature review. For applications that make heavy use of state sharing, this is a good implementation, although the increase in implementation complexity needs to be weighed against it.
+
+Fast cold starts are achieved by initializing a \inl{faaslet} ahead-of-time as a snapshot of a function's stack, heap function table, stack pointer and data. This is generated at function-creation time and stored in an object store. When cold starting a function, the snapshot is retrieved and restored to produce a \inl{faaslet} instance. The restoration procedure guarantees no data from previous invocations is shared with future invocations. This is similar to how we use WebAssembly \inl{Module}s as our templates and produce \inl{Instance}s on every invocation for isolation.
+However, due to their pre-creation and restore procedure, the cold start times are at around 1 millisecond.
+This technique could be adopted in our work as well to provide even faster cold starts.
+
 \section{WebAssembly in Other Contexts}
 
 smart contracts
