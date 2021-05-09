@@ -26,7 +26,7 @@ Recall our research questions.
 
 In Chapter \ref{chapter:background} we described the serverless workload in detail, which guided decisions in our implementation. Specifically, we already used that research to get an idea about what concurrency model may be a better fit for our executor.
 
-This research workload represents the current \emph{cloud} workload and may or may not be transferable to workloads at the edge. Because of that, we also take some examples of visionary use cases into account and infer scenarios, i.e. the order of cold starts and warm starts, as well as workload types, i.e. whether functions are CPU- or I/O-bound. That includes both serverless edge workloads and latency-sensitive ones.
+This research workload represents the current \emph{cloud} workload and may or may not be transferable to workloads at the edge. Because of that, we also take some examples of visionary and potential use cases into account and infer scenarios, i.e. the order of cold starts and warm starts, as well as workload types, i.e. whether functions are CPU- or I/O-bound. That includes both serverless edge workloads and latency-sensitive ones.
 
 % To measure the performance of the serverless platform in a meaningful way, we reviewed the literature for use cases, where latency is critical; in turn, where the cold start time matters most. From these examples as well as characterizations of the workload types in section \ref{section:serverless_workload}, we infer an evaluation workload.
 
@@ -55,6 +55,11 @@ OpenWhisk makes its docker runtime images available for the \inl{x86\_64} archit
     \item[I/O-bound] For this workload we want to measure the effect of a blocking operation, such as an HTTP request. However, due to the lack of networking in WASI, we instead use a \inl{sleep} system call. In WebAssembly this is implemented through capabilities. The module declares an import called \inl{http.get}, which the WebAssembly executor provides. It is a function natively compiled into the executor which blocks for exactly 300ms, so the perceived effect of this function is the same as waiting for I/O completion.
 \end{description}
 
+\subsection{Hardware Classes}
+
+Based on the introduced scenarios we can also infer what types of hardware to evaluate our system on. The Vital Signs  and Edge Analysis scenarios both work with lower end devices, like single board computers (SBC) or smartphones. For timely image recognition in the Augmented Reality example on the other hand, a more powerful machine would be required. The API example is more independent of the hardware and could run anywhere from SBCs to the cloud. 
+Overall, SBCs can be considered characteristic of these edge computing scenarios but further ones include urban sensing, industry 4.0 scenarios and vehicular networks \cite{Rausch2020}. However, other configurations exist, for instance in edge data centers, where more powerful hardware can be found.
+Accordingly, we use a Raspberry Pi as an exemplary SBC and a server-grade machine to represent more powerful devices possibly located at the edge or in cloud data centers.
 
 \subsection{Setup}
 
@@ -101,7 +106,7 @@ Our test procedure follows this pattern:
 
 \subsection{Deployment}
 
-We run our evaluation on an edge device as well as a \inl{x86\_64} desktop machine. The edge device is a Raspberry Pi Model 3B, which has 1 GB of RAM and is running the latest version of the 64-bit Raspberry Pi OS (version \inl{2020-08-20}). We are using the 64-bit version, because the \inl{wasmtime} runtime cannot be compiled for the 32-bit ARM architecture. The desktop has an Intel® Xeon® E3-1231 v3 (3.40 GHz) server-grade CPU with 4 physical cores and 8 logical threads. Mass storage is a Samsung SSD 850 EVO -- which is where Docker images are stored and loaded from -- and it has 8 GB of RAM and is running Ubuntu 20.04.2 LTS.
+We run our evaluation on an edge device as well as a \inl{x86\_64} server-class machine. The edge device is a Raspberry Pi Model 3B, which has 1 GB of RAM and is running the latest version of the 64-bit Raspberry Pi OS (version \inl{2020-08-20}). We are using the 64-bit version, because the \inl{wasmtime} runtime cannot be compiled for the 32-bit ARM architecture. The server has an Intel® Xeon® E3-1231 v3 (3.40 GHz) server-grade CPU with 4 physical cores and 8 logical threads. Mass storage is a Samsung SSD 850 EVO -- which is where Docker images are stored and loaded from -- and it has 8 GB of RAM and is running Ubuntu 20.04.2 LTS.
 
 Due to difficulties in deploying OpenWhisk on the Raspberry Pi with Kubernetes and ansible, we use the standalone Java version for evaluation. The standalone version uses OpenWhisk's \emph{lean} components for internal messaging and load balancing. These are components written specifically for deployment on resource-constrained devices. Since we are not benchmarking OpenWhisk itself, but rather the underlying container technology, we do not believe this to be a threat to validity.
 
@@ -134,11 +139,11 @@ Even at 2 concurrent requests, the Wasm executors have a cold start time of arou
     \begin{center}
         \input{figures/pc-cold-start-separate-hash.pgf}
     \end{center}
-    \caption{The cold start time with a CPU-bound workload on a Desktop machine with both Docker and Wasm-based container runtimes. The docker values range between 869 ms and 2873 ms, while the Wasm values generally range from 47 ms to 180 ms.}
+    \caption{The cold start time with a CPU-bound workload on a server machine with both Docker and Wasm-based container runtimes. The docker values range between 869 ms and 2873 ms, while the Wasm values generally range from 47 ms to 180 ms.}
     \label{fig:pc-cold-start-hash}
 \end{figure}
 
-For comparison, the cold start times on our \inl{x86\_64} desktop machine are in Figure \ref{fig:pc-cold-start-hash}. The relative differences are similar to the Raspberry Pi. In particular, the Wasm executors behave more predictably on both machines. Docker cold start latencies suffer under rising concurrency and vary much more.
+For comparison, the cold start times on our \inl{x86\_64} server machine are in Figure \ref{fig:pc-cold-start-hash}. The relative differences are similar to the Raspberry Pi. In particular, the Wasm executors behave more predictably on both machines. Docker cold start latencies suffer under rising concurrency and vary much more.
 The average reduction in cold start times are 94\% for \inl{wasmtime} and \inl{wamr} and 93\% for \inl{wasmer}.
 % The improvements are very consistent across the number of concurrent requests, with a standard deviation of less than 0.01 percentage points for all runtimes.
 
@@ -172,16 +177,16 @@ In the previous cold start test it became apparent that running OpenWhisk vanill
     \begin{center}
         \input{figures/pi-pc-load-mixed.pgf}
     \end{center}
-    \caption{The throughput in requests per second with an equal amount of I/O- and CPU-bound workload on a Raspberry Pi and a Desktop machine with both Docker and Wasm-based container runtimes.}
+    \caption{The throughput in requests per second with an equal amount of I/O- and CPU-bound workload on a Raspberry Pi and a server machine with both Docker and Wasm-based container runtimes.}
     \label{fig:pi-pc-load-mixed}
 \end{figure}
 
-OpenWhisk vanilla manages to handle up to 10 concurrent requests on the Pi, at which point it creates a third container, which forces the Pi to use its swap memory and become orders of magnitude slower. Again, at this point we stopped testing. The workload we run is mixed and made up of an equal amount of I/O- and CPU-bound actions. Whether one or the other is executed is determined at random, such that, on average, half will be I/O-bound and half will be CPU-bound. We execute two runs and take the average for each number of concurrent requests. Note that the CPU-bound workload is chosen such that the execution time is similar on the Raspberry and the Desktop machine, since the blocking I/O-bound workload also takes the same amount of time on both devices. That makes the results more comparable. This test is executed with Apache JMeter\footnote{\url{https://jmeter.apache.org/}}, a load testing tool. 
+OpenWhisk vanilla manages to handle up to 10 concurrent requests on the Pi, at which point it creates a third container, which forces the Pi to use its swap memory and become orders of magnitude slower. Again, at this point we stopped testing. The workload we run is mixed and made up of an equal amount of I/O- and CPU-bound actions. Whether one or the other is executed is determined at random, such that, on average, half will be I/O-bound and half will be CPU-bound. We execute two runs and take the average for each number of concurrent requests. Note that the CPU-bound workload is chosen such that the execution time is similar on the Raspberry and the server machine, since the blocking I/O-bound workload also takes the same amount of time on both devices. That makes the results more comparable. This test is executed with Apache JMeter\footnote{\url{https://jmeter.apache.org/}}, a load testing tool. 
 
 \begin{table}[h!]
     \centering
     \begin{tabular}{c | c | c}
-        Runtime        & Raspberry Pi & Desktop\\
+        Runtime        & Raspberry Pi & Server\\
         \hline
         \inl{wasmtime} & 3.8 & 2.2\\
         \inl{wasmer}   & 4.2 & 3.0\\
@@ -192,20 +197,20 @@ OpenWhisk vanilla manages to handle up to 10 concurrent requests on the Pi, at w
 \end{table}
 
 We can immediately see a stronger difference in all container runtimes than in the cold start test.
-The performance improvements are listed in Table \ref{table:pi-pc-load-mixed-improvements}, where we can see, that on both devices, the WebAssembly executors are better able to handle a mixed workload. The executors perform similarly on both hardware classes when examining the order of fastest to slowest. However, on the Desktop, \inl{wasmer} has a greater lead on \inl{wasmtime} than on the Pi. Both of these runtimes perform with higher fluctuations than \inl{wamr}, which has a very consistent behaviour. In general, the effect is more pronounced on the Raspberry Pi, indicating that Docker is less suitable for edge devices than for cloud hardware.
+The performance improvements are listed in Table \ref{table:pi-pc-load-mixed-improvements}, where we can see, that on both devices, the WebAssembly executors are better able to handle a mixed workload. The executors perform similarly on both hardware classes when examining the order of fastest to slowest. However, on the server, \inl{wasmer} has a greater lead on \inl{wasmtime} than on the Pi. Both of these runtimes perform with higher fluctuations than \inl{wamr}, which has a very consistent behaviour. In general, the effect is more pronounced on the Raspberry Pi, indicating that Docker is less suitable for edge devices than for cloud hardware.
 
 The lead is taken by \inl{wasmer}, likely because we configured it to use the \inl{LLVM} compiler toolchain, which produces high-quality native code. On the other hand, \inl{wamrc} also uses \inl{LLVM} for ahead-of-time compilation, but performs worse. In our later experiments we will see that that \inl{wamr} has a stronger tendency to optimize for size, perhaps at the expense of speed, which may be a contributing factor. Additionally, its API does not allow us to thread-safely initialize the module once and run it often. Instead, the module needs to be instantiated from the raw bytes on every \inl{run} call. Because of that, the implementation is less efficient compared to the other executors.
 \inl{wasmtime} is configured to use the \inl{cranelift} JIT compiler. Because of the inherent trade-off such a compiler has to make between compilation speed and code quality, it is perhaps unsurprising that it is less performant than \inl{wasmer}. Interestingly, it still performs better than \inl{wamr}.
 
 \subsection{I/O-bound Workload}
 
-To get a more isolated picture of the container runtimes performance, we test the workloads separately on our Desktop machine. The I/O-bound test is supposed to test the container runtimes' ability to handle concurrent network requests. As we've explored in Chapter \ref{chapter:background}, serverless functions are frequently used with external services, such as databases. This test simulates this behaviour by blocking with a thread \inl{sleep} just like an I/O request would block. In the Wasm executors this is implemented with the capabilities, which allows the Wasm runtimes to supply native host functions as imports to the module. In this instance, we create our action using \inl{--annotation net\_access true} with the \inl{wsk} cli. The Wasm executor then provides the \inl{http.get} function as an import to the module. Each executor implements this with the aforementionend \inl{sleep}. The module can then use these functions as if they were part of the module. This way, we could easily implement an actual HTTP GET request. However, the lack of interface types means the module can only call native functions with integer parameters and return values, such that the practical use is still inhibited.
+To get a more isolated picture of the container runtimes performance, we test the workloads separately on our server machine. The I/O-bound test is supposed to test the container runtimes' ability to handle concurrent network requests. As we've explored in Chapter \ref{chapter:background}, serverless functions are frequently used with external services, such as databases. This test simulates this behaviour by blocking with a thread \inl{sleep} just like an I/O request would block. In the Wasm executors this is implemented with the capabilities, which allows the Wasm runtimes to supply native host functions as imports to the module. In this instance, we create our action using \inl{--annotation net\_access true} with the \inl{wsk} cli. The Wasm executor then provides the \inl{http.get} function as an import to the module. Each executor implements this with the aforementionend \inl{sleep}. The module can then use these functions as if they were part of the module. This way, we could easily implement an actual HTTP GET request. However, the lack of interface types means the module can only call native functions with integer parameters and return values, such that the practical use is still inhibited.
 
 \begin{figure}
     \begin{center}
         \input{figures/pc-load-block.pgf}
     \end{center}
-    \caption{The throughput with an I/O-bound workload on a Desktop machine with both Docker and Wasm-based container runtimes. The y-axis shows the throughput in requests per second, while the x-axis shows the number of concurrent requests, each of which is repeated 50 times to generate a consistent load over a short period of time.}
+    \caption{The throughput with an I/O-bound workload on a server machine with both Docker and Wasm-based container runtimes. The y-axis shows the throughput in requests per second, while the x-axis shows the number of concurrent requests, each of which is repeated 50 times to generate a consistent load over a short period of time.}
     \label{fig:pc-load-block}
 \end{figure}
 
@@ -219,7 +224,7 @@ The Wasm executors on the other hand, have no such issue and can essentially sca
     \begin{center}
         \input{figures/pc-load-hash.pgf}
     \end{center}
-    \caption{The throughput with a CPU-bound workload on a Desktop machine with both Docker and Wasm-based container runtimes. The y-axis shows the throughput in requests per second, while the x-axis shows the number of concurrent requests, each of which is repeated 50 times to generate a consistent load over a short period of time.}
+    \caption{The throughput with a CPU-bound workload on a server machine with both Docker and Wasm-based container runtimes. The y-axis shows the throughput in requests per second, while the x-axis shows the number of concurrent requests, each of which is repeated 50 times to generate a consistent load over a short period of time.}
     \label{fig:pc-load-hash}
 \end{figure}
 
@@ -272,7 +277,7 @@ Since we cannot simulate a test on the scale of Azure, we map the workload to a 
 
 Thus, there is a high probability that a function is called, for which a warm container should be available. Occasionally, one of the rare functions is called which will inevitably cause a cold start. In summary, this test will show the performance of the system under load, where most functions are warm but the occasional cold start will need to be handled. We have plotted the ECDF of this test in Figure \ref{fig:pc-load-zipf}.
 
-For the Docker runtime, we can see that around 40\% of requests were finished in less than 500 ms. However, around 60\% of requests were only finished in less than 1500 ms. We can reasonably explain this with warm and cold starts. The pure function execution times are always less than 300 ms, because we configured them so. From Figure \ref{fig:pc-cold-start-hash} we know that the average cold start time of Docker on the Desktop at 4 concurrent requests is 1269 ms. Thus, once a cold start is incurred it adds that amount to the latency seen by the caller. Therefore, either functions run in a warm container for around 500 ms, or they cause a cold start and need the same amount of time in addition to the cold start, which is why we see the sudden increase at around 500 ms. Once cold starts are occurring, they have a detrimental effect on the overall system performance as indicated by \todo{Is it clear what I mean by that?} the decrease in slope beyond 1000 ms.
+For the Docker runtime, we can see that around 40\% of requests were finished in less than 500 ms. However, around 60\% of requests were only finished in less than 1500 ms. We can reasonably explain this with warm and cold starts. The pure function execution times are always less than 300 ms, because we configured them so. From Figure \ref{fig:pc-cold-start-hash} we know that the average cold start time of Docker on the server at 4 concurrent requests is 1269 ms. Thus, once a cold start is incurred it adds that amount to the latency seen by the caller. Therefore, either functions run in a warm container for around 500 ms, or they cause a cold start and need the same amount of time in addition to the cold start, which is why we see the sudden increase at around 500 ms. Once cold starts are occurring, they have a detrimental effect on the overall system performance as indicated by \todo{Is it clear what I mean by that?} the decrease in slope beyond 1000 ms.
 
 Up to 20\% of invocations handled by the Docker runtime finish in the same amount of time or faster than WebAssembly executors. Given the bend at 40\% and our experimental setup, this is because half of the actions executed warm are CPU-bound, while the other half is I/O-bound. This is consistent with the previous data. As we have seen in Figure \ref{fig:pc-load-hash}, the Docker runtime is able to handle CPU-bound actions faster, thanks to directly executing native code. But it became clear in Figure \ref{fig:pc-load-block} that the runtime is less well equipped to handle I/O-bound ones. Hence, why we see the bend at around 20\%, where the docker curve migrates from being faster than the Wasm executors to being slower.
 
@@ -380,7 +385,7 @@ When only accounting for the overhead introduced by the executors themselves, on
 
 \subsubsection*{How do the performance characteristics of the WebAssembly and Docker container runtimes differ?}
 
-In the mixed and realistic workload we can best see the holistic picture. Here, the WebAssembly executors are always faster than Docker. In the mixed workload, the WebAssembly executors are between 1.6 and 3 times faster on the Desktop, and 2.4 to 4.2 times faster on the Pi. In the realistic workload, we find Docker's overall performance to be strongly linked to the cold start time. The WebAssembly executors, however, are not noticeably susceptible to cold starts, showing much more consistent behavior.
+In the mixed and realistic workload we can best see the holistic picture. Here, the WebAssembly executors are always faster than Docker. In the mixed workload, the WebAssembly executors are between 1.6 and 3 times faster on the server, and 2.4 to 4.2 times faster on the Pi. In the realistic workload, we find Docker's overall performance to be strongly linked to the cold start time. The WebAssembly executors, however, are not noticeably susceptible to cold starts, showing much more consistent behavior.
 
 For I/O-bound workloads, the used Docker image showed a higher overhead even when the execution time itself was fixed. It proves that Docker has a higher inherent management cost. On the other hand, it handles pure CPU-bound workloads very well. It proves once more that Docker containers can be very performant, once they are running. The issue is getting to that point.
 The Wasm executors scale linearly for I/O-bound workloads, up to the limits imposed by OpenWhisk and later the underlying operating system, due to their threading model. Once Wasm runtimes allow handling I/O asynchronously -- which is starting to appear -- we expect this performance to be even better while consuming much fewer resources.
@@ -396,5 +401,5 @@ The cost for keeping containers warm is relatively consistent for Docker indepen
 % To answer this question, we take into account everything we have learned during both the design and evaluation phase. 
 Both \inl{wasmtime} and \inl{wasmer} have an API that allows us to efficiently implement our main requirements for modules: An initialize once, run often lifecycle. Unfortunately, \inl{wamr}'s API is less suitable to that task and it may be part of why it lacks in performance. It has the lowest performance of Wasm executors in I/O- and CPU-bound workloads, as well as the mixed and realistic workload. The memory usage, on the other hand, is lowest in terms of idle footprint and container size, from a pure numbers perspective. A certain upside is its support for more instruction set architectures than the others, which is relevant for edge devices. From a performance perspective however, unless memory is very constrained, it is the least suitable of our selected runtimes.
 
-It then comes down to the other two runtimes. The main advantage of \inl{wasmer} is its Ahead-of-Time compilation that produces very high quality native code, evident by its performance in CPU-bound workloads. This seems to be coupled with being 47\% slower in cold starts than \inl{wasmtime}, which handles this task particularly well. On edge devices and in a mixed workload, the margin to \inl{wasmer} is slimmer than on the Desktop. Both runtimes support primarily \inl{x86\_64} and \inl{aarch64}, which covers a wide range of devices, but not all. How relevant that is depends on the planned use of the serverless platforms and whether its worker nodes would run on devices with other ISAs.
+It then comes down to the other two runtimes. The main advantage of \inl{wasmer} is its Ahead-of-Time compilation that produces very high quality native code, evident by its performance in CPU-bound workloads. This seems to be coupled with being 47\% slower in cold starts than \inl{wasmtime}, which handles this task particularly well. On edge devices and in a mixed workload, the margin to \inl{wasmer} is slimmer than on the server. Both runtimes support primarily \inl{x86\_64} and \inl{aarch64}, which covers a wide range of devices, but not all. How relevant that is depends on the planned use of the serverless platforms and whether its worker nodes would run on devices with other ISAs.
 In conclusion, both of these runtimes are good general-purpose choices and perform well under various circumstances.
