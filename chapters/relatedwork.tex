@@ -77,7 +77,14 @@ Fast cold starts are achieved by initializing a \inl{faaslet} ahead-of-time as a
 However, due to their pre-creation and restore procedure, the cold start times are at around 1 millisecond.
 This technique could be adopted in our work as well to provide even faster cold starts.
 
-\section{WebAssembly in Other Contexts}
+\section{WebAssembly in Smart Contracts}
 
-smart contracts
-wasm @ edge
+Smart contracts are programs deployed to distributed ledgers from where they can be run by users on-demand. As such, smart contracts are akin to serverless functions, since developers do not need to manage the machines they run on. Users of the contract often pay a per transaction fee similar to the pay-as-you-go model of serverless and the node running the untrusted contract needs to isolate its execution to enable secure multi-tenancy.
+The transaction fee is usually based on the amount of CPU the smart contract consumes, which incentivizes developers to produce lightweight code. That in turn means it is very likely that the average smart contract executes much faster than the average serverless function, making OS-level virtualization even less suitable since it would be responsible for an even larger proportion of the latency. The node operator running the smart contract has an interest in achieving high throughput to make the most of the available resources, so performance cannot be neglected. Additionally, smart contract nodes need to handle bursty request patterns and thus need to be elastic.
+These requirements are similar to what a serverless container runtime needs to offer.
+
+Fittingly, WebAssembly has been recognized as a suitable target format for smart contracts. The Ethereum-flavored WebAssembly restricts WebAssembly opcodes to a suitable subset for smart contracts and one of the cited reasons for the switch from the previous custom virtual machine is performance \cite{Ewasm2021}.
+The conforming hera\footnote{\url{https://github.com/ewasm/hera}} implementation can use WebAssembly runtimes that use interpretation, JIT or AoT compilation strategies. One of the options includes \inl{WAVM}\footnote{\url{https://github.com/WAVM/WAVM}}, a runtime written in C++ with a focus on performance and claimed near-native execution speed.
+Other ledgers like near\footnote{\url{https://github.com/near/nearcore/tree/master/runtime/near-vm-runner/}} use \inl{wasmer} with caching, IOTA\footnote{\url{https://github.com/iotaledger/wasp}} uses \inl{wasmtime} and EOSIO\footnote{\url{https://github.com/EOSIO/eos-vm}} implemented their own WebAssembly VM, citing a lack of performance in existing runtimes. Many more ledgers have adopted what seems to have become the de-facto standard target format for smart contracts.
+
+Overall, these approaches validate the fundamental choice of WebAssembly as a performant option in scenarios where lightweight isolation is required. The smart contract space will be interesting to watch and has already given rise to some WebAssembly synergies. For example, near is listed as a platin sponsor on AssemblyScript's GitHub page\footnote{\url{https://github.com/AssemblyScript/assemblyscript/}}, which might make AssemblyScript a more viable and mature alternative to write serverless functions in WebAssembly.
