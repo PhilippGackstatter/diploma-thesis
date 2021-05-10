@@ -58,7 +58,7 @@ OpenWhisk makes its docker runtime images available for the \inl{x86\_64} archit
 \subsection{Hardware Classes}
 
 Based on the introduced scenarios we can also infer what types of hardware to evaluate our system on. The Vital Signs  and Edge Analysis scenarios both work with lower end devices, like single board computers (SBC) or smartphones. For timely image recognition in the Augmented Reality example on the other hand, a more powerful machine would be required. The API example is more independent of the hardware and could run anywhere from SBCs to the cloud. 
-Overall, SBCs can be considered characteristic of these edge computing scenarios but further ones include urban sensing, industry 4.0 scenarios and vehicular networks \cite{Rausch2020}. However, other configurations exist, for instance in edge data centers, where more powerful hardware can be found.
+Overall, SBCs can be considered characteristic of these edge computing scenarios and further ones include urban sensing, industry 4.0 and vehicular networks \cite{Rausch2020}. However, other configurations exist, for instance in edge data centers, where more powerful hardware can be found.
 Accordingly, we use a Raspberry Pi as an exemplary SBC and a server-grade machine to represent more powerful devices possibly located at the edge or in cloud data centers.
 
 \subsection{Setup}
@@ -296,9 +296,7 @@ One question that might arise while looking at this figure is why 60\% of the re
 
 This test aims to evaluate what the resource costs are, for keeping actions in memory and ready for execution.
 To that end, we run our cold start test again and measure the amount of memory for each container once the actions have finished execution, but before OpenWhisk removes them. At this point, Docker containers have been paused by OpenWhisk. We use the memory usage output of \inl{docker stats} as the basis for evaluation. For the Wasm executors we read the resident set size (rss) of the entire process. Hence, we also measure the overhead of the web framework we run on, but also the Wasm runtimes' objects which are instantiated globally, such as \inl{Engine}s. Thus, this method is slightly imprecise in that it reads more than the pure memory occupied by the container. It would be difficult to define what constitutes the container, too, since the data structures, global or not, are all linked together to produce the running system. Since the Docker container also contains other data only more or less relevant to the execution, this is acceptable. It gives us an estimate for the average total cost of keeping a container in memory. Ultimately, the entire memory consumption is what matters. This method works slightly in favor of Docker, since we do not measure the memory allocated to the Docker daemon process.
-For the Wasm executors, we divide the measured amount of memory by the number of containers that are kept alive at that point, to get an estimated memory usage for each container. The amount of memory consumed when idling, i.e. after startup, are 7.07 MiB for \inl{wasmtime}, 4.23 MiB for \inl{wamr} and 5.28 MiB for \inl{wasmer}. At first glance, it may seem that \inl{wasmtime} fares the worst. However, this may be due to the fact that \inl{wasmtime}'s API is the most suitable to our needs, because it lets us instantiate more of the necessary data structures ahead of time than the other runtimes. We are very happy to trade this memory for less setup costs later. \todo{I will rework this part once I have finishe the wasmer section in the Design.}
-
-% wasm-opt -O4 and lto = true applied
+For the Wasm executors, we divide the measured amount of memory by the number of containers that are kept alive at that point, to get an estimated memory usage for each container. The amount of memory consumed when idling, i.e. after startup, are 7.07 MiB for \inl{wasmtime}, 4.23 MiB for \inl{wamr} and 5.28 MiB for \inl{wasmer}. At first glance, it may seem that \inl{wasmtime} and \inl{wasmer} fare the worst. However, this may be due to the fact that their APIs are the most suitable to our needs, because it lets us instantiate more of the necessary data structures ahead of time than the other runtimes. We are very happy to trade this memory for less setup costs later.
 
 For the Wasm executors, we expect the amount of consumed memory to depend primarily on the size of the Wasm module.
 So we run this test thrice. For that we compile the \inl{hash} module with different options to get different module sizes.
@@ -311,8 +309,6 @@ So we run this test thrice. For that we compile the \inl{hash} module with diffe
 
 LTO enables compilers to perform expensive, but very effective optimizations at compile time, when the different libraries of the program are linked together. Compiling our hash module with LTO brings the size down to 16.5\% (312 KiB) of the non-LTO version.
 The resulting sizes of the Wasm modules and the native binaries are given in Table \ref{table:hash-binary-size}, to provide context for the following results.
-
-% TODO: In the preceding section, check whether the claim about wasmtime <-> wasmer is correct
 
 \begin{table}[h!]
     \centering
