@@ -71,6 +71,10 @@ The third question explores, what the cost of not scaling to zero is, i.e. when 
 
 The fourth question is directed at finding the WebAssembly runtime best suited for the execution of modules on low-energy and resource-constrained edge devices. We use a Raspberry Pi single-board computer as our edge device to run our serverless environment on and evaluate the different runtimes from there. All of the preceding measurements as well as our experiences in the design phase are amalgamated to produce an answer to this question.
 
+\subsubsection*{How suitable is WebAssembly for serverless execution?}
+
+The final question aims to make a conclusion about the suitability of WebAssembly itself, based on our evaluation of multiple runtimes, but not necessarily limited to it. It takes into account what we learn during the literature review as well as the design phase.
+
 \subsection{Terminology}
 
 First, a note on terminology for the rest of this work. Since runtime is a very overloaded term in our context, we may also refer to container runtimes as executors, i.e. the programs responsible for managing containers. Runtime appears also as the word for language runtimes, for example, \inl{node.js} for JavaScript or a Python interpreter.
@@ -93,6 +97,6 @@ In Chapter \ref{chapter:design} we discuss approaches for potential solutions to
 
 In Chapter \ref{chapter:evaluation} we evaluate the system for the cold start latency, different workload types and memory usage in warm containers.
 
-In Chapter \ref{chapter:relatedwork} we examine the current research for other approaches that attempt to solve the cold start problem and discuss the differences to our approach. \todo{And possibly more... will update once chapter is written.}
+In Chapter \ref{chapter:relatedwork} we examine the current research for other approaches that attempt to solve the cold start problem and discuss the differences to our approach. We also discuss other work that brings WebAssembly to serverless.
 
 In Chapter \ref{chapter:conclusion} we summarize the results of our work and give an overview of open research questions.
