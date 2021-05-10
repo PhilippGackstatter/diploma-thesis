@@ -94,22 +94,12 @@ However, it also shows that the lack of high performance in serverless may be an
 
 \section{WebAssembly}
 
-% - origins (asm.js)
-% - first implemented in browsers, targeted at web
-% - but standalone runtimes exist, similar to V8 which was the node.js runtime for Chrome and later became node.js
-% - now also used at cloud service providers for serverless functions (fastly, cloudflare) and as the VM for smart contracts implementation, for instance in IOTA. In all three of these cases security is quite important, as untrusted code is executed.
-% - security properties of Wasm
-% - Finally, speed is also important (whole reason why asm.js was made in the first place)
-% - to use outside of the browser, need a interface to the OS, the task that is done by the browser on the web platform
-
 For the longest time, JavaScript was the sole client-side language in web browsers. With the rising popularity of the web platform and its growing number of APIs, more and more complex web apps were written, and increasingly in other programming languages. Necessarily, these languages had to treat JavaScript as a target format, like Java bytecode or machine-level assembly, in order to run on the web. Of course, JavaScript was not designed for this and so performance was lacking.
 
 In 2013, a solution to this problem was introduced by engineers at Mozilla, aptly named \inl{asm.js}. It restricts itself to the parts of JavaScript that can be optimized ahead-of-time \cite{Herman2014}. It might be used to compile a C/C++ program to the \inl{asm.js} target format to execute it with a JavaScript runtime faster than the equivalent JavaScript program would be. Benchmarks even showed it to run no more than 1.5 times slower than native code \cite{Zakai2013}.
 
 Finally, WebAssembly (Wasm) was born out of \inl{asm.js} in 2015, with more layers of optimizations. It is a portable and universal binary instruction format for memory-safe, sandboxed execution in a virtual machine.
 It is possible to write programs in a variety of languages like C, C++, Rust, AssemblyScript, C\#, Go, Swift and many more, and compile them to Wasm, which finally relieves JavaScript of its role as the universal target format of the web \cite{W3C2020}.
-
-% Since it is a bytecode format independent from JavaScript, it requires a separate runtime and sandboxing mechanism.
 
 \subsection{Performance}
 
@@ -122,7 +112,6 @@ Wasm modules tend to be smaller than native \inl{x86\_64} binaries. On average, 
 Serverless functions, by design, are microservices and thus limited in scope. Developers are compelled to write short and efficient functions, since they are billed for the execution time. The PolyBenchC benchmark results are thus likely more representative than the SPEC suite. However, this assumption is good enough and will be an aspect of our evaluation, regardless.
 To increase performance and startup time, Wasm modules can be compiled to native code, either by JIT engines at the time of execution, or ahead-of-time by the same JIT engines or AoT compilers. This process produces an artifact specific to the WebAssembly runtime that compiled it. At this point, the universality of the Wasm format is lost. Doing the translation to native code ahead-of-time means the compilation process does not take up time when we need to execute. Consequently, this is an interesting technique to reduce the time it takes to get a WebAssembly module ready for execution.
 
-% How relevant is native speed actually for the serverless context -- examine in later chapter?
 
 % The binary format is designed to allow streaming the contents, so that parts of it can be compiled even before the entire module has been transmitted. (but this is actually irrelevant for our OW implementation, since we have the init call first, in which the module is stored in a hashmap, and later the run call, where it is directly read from memory)
 
