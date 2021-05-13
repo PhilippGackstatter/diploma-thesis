@@ -76,13 +76,19 @@ A summary of the runtimes we looked at can be found in table \ref{table:wasm-run
 \begin{table}[h!]
     \centering
     \begin{tabular}{c | c | c | c}
-        Runtime        & ISA support & Execution modes  & Platform support\\
+        Runtime        & ISA support & Compilation  & Platforms\\
         \hline
-        \inl{wasmtime} & \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
-        \inl{lucet}    & \inl{x86\_64} & AoT & \linux, \macos\\
-        \inl{wasmer}   & \inl{x86}, \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux, \macos, \windows\\
-        \inl{wasm3}    & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{RISC-V}, ...  & Interpreted      & \linux, \macos, \windows, \freebsd, \android, \ios\\
-        \inl{wamr}     & \inl{x86}, \inl{x86\_64}, \inl{arm}, \inl{aarch64}, ... & AoT, Interpreted & \linux, \macos, \windows, \android, ... \\
+        \inl{wasmtime} & \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux \hspace{1mm} \macos \hspace{1mm} \windows\\
+        \hline
+        \inl{lucet}    & \inl{x86\_64} & AoT & \linux \hspace{1mm} \macos\\
+        \hline
+        \inl{wasmer}   & \inl{x86}, \inl{x86\_64}, \inl{aarch64} & AoT, JIT & \linux \hspace{1mm} \macos \hspace{1mm} \windows\\
+        \hline
+        \multirow{2}{*}{\inl{wasm3}} & \inl{x86}, \inl{x86\_64}, \inl{arm}, & \multirow{2}{*}{Interpreted} & \linux \hspace{1mm} \macos \hspace{1mm} \windows\\
+        & \inl{RISC-V}, ... & & \freebsd \hspace{1mm} \android \hspace{1mm} \ios\\
+        \hline
+        \multirow{2}{*}{\inl{wamr}} & \inl{x86}, \inl{x86\_64}, \inl{arm}, & \multirow{2}{*}{AoT, Interpreted} & \linux \hspace{1mm} \macos\\
+        & \inl{aarch64}, ... & & \windows \hspace{1mm} \android \hspace{1mm} ... \\
     \end{tabular}
     \caption{WebAssembly runtime feature overview.}
     \label{table:wasm-runtime-overview}
