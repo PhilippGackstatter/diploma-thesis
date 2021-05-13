@@ -5,7 +5,7 @@ In this work, we implemented a WebAssembly container runtime for Apache OpenWhis
 
 \section{Research Questions}
 
-\subsubsection*{By how much can WebAssembly runtimes alleviate the cold start latency?}
+\subsubsection*{RQ1: By how much can WebAssembly runtimes alleviate the cold start latency?}
 
 Our WebAssembly executors can reduce the cold start latency, on average, by more than 99.5\% on a Raspberry Pi compared to OpenWhisk using Docker. This is in part due to Docker reaching the memory limits of the Pi and swapping. However, even on our server machine, where enough memory is available, the cold start time can be reduced by around 94\%, on average. The executors behave more consistently in the cold start than the Docker container runtime. Among the Wasm runtimes, \inl{wasmer} takes more time for the cold start than the others, being between 47\% and 61\% slower. The \inl{wamr} and \inl{wasmtime} runtime behave very similar with \inl{wamr} taking the lead, due to its computationally cheap initialization procedure.
 
@@ -13,7 +13,7 @@ When only accounting for the overhead introduced by the executors themselves, \i
 On the Raspberry Pi, the WebAssembly runtimes bring the cold start overhead into the range of 112 ms to 274 ms, which is on the same order of magnitude as Docker on a server machine.
 Furthermore, we have seen in our tests -- what is also confirmed by other research \cite{Mohan2019} -- that Docker startup times rise under increasing concurrency, while the Wasm executors behave consistently across the number of concurrent requests. Since bursty workloads are especially prevalent in serverless, this is an equally important property. With these results, we expect Wasm executors to perform similarly outside of the OpenWhisk context.
 
-\subsubsection*{How do the performance characteristics of the WebAssembly and Docker container runtimes differ?}
+\subsubsection*{RQ2: How do the performance characteristics of the WebAssembly and Docker container runtimes differ?}
 
 In the mixed and realistic workload we can best see the holistic picture because it includes cold starts. Here, the WebAssembly executors are always faster than Docker. In the mixed workload, the WebAssembly executors are between 1.6 and 3 times faster on the server, and 2.4 to 4.2 times faster on the Pi. In the realistic workload, we find Docker's overall performance to be strongly linked to the cold start time. The WebAssembly executors, however, are not noticeably susceptible to cold starts, showing much more consistent behavior. In the realistic workload, \inl{wasmer} takes the lead and processes around 95\% of requests strictly faster than all other container runtimes. For sufficiently long requests, either CPU- or I/O-bound, the cold start time of \inl{wasmer} does not significantly affect its performance, even though it is twice that of \inl{wasmtime} or \inl{wamr}.
 % In particular for low number of concurrent requests, Docker scales very poorly compared to Wasm executors, which may be inherent to OpenWhisk as indicated by \cite{??}
@@ -24,12 +24,12 @@ The Wasm executors scale linearly for I/O-bound workloads, up to the limits impo
 On the other side, Docker handles pure CPU-bound workloads very well. It proves once more that Docker containers can be very performant -- once they are running. The issue is getting to that point.
 In terms of pure CPU utilization, \inl{wasmer} managed 88\% of the throughput compared to the native binary in a Docker container, with the other runtimes falling behind more quickly. Our AssemblyScript experiment showed, however, that the prevalent \inl{node.js} runtime would perform much worse under such workloads, indicating that they are either not very common in today's FaaS or that this level of performance is good enough. Since WebAssembly shows to be several factors faster, this is an overall improvement.
 
-\subsubsection*{What are the resource costs for keeping containers warm in both container runtimes?}
+\subsubsection*{RQ3: What are the resource costs for keeping containers warm in both container runtimes?}
 
 The cost for keeping containers warm is relatively consistent for Docker independent of module size, for the image we tested. The in-memory size of WebAssembly containers is primarily determined by the module they hold. The \inl{wasmer} runtime shows the strongest such effect closely followed by \inl{wasmtime}. Due to not keeping modules in memory between requests, \inl{wamr} shows very little memory usage and exemplifies the use case when memory would be very constrained and a priority over speed. WebAssembly modules can be optimized to contain only the necessary code with LTO compilation in Rust or with AssemblyScript by default, in which case the module is in the lower kilobytes range.
 Overall, for these low-sized WebAssembly modules, the Wasm executors can be expected to consume less memory than the Docker image we tested and thus hold multiple containers in the same amount of memory.
 
-\subsubsection*{Which WebAssembly runtime is the most suitable for use on edge devices?}
+\subsubsection*{RQ4: Which WebAssembly runtime is the most suitable for use on edge devices?}
 
 % To answer this question, we take into account everything we have learned during both the design and evaluation phase. 
 Both \inl{wasmtime} and \inl{wasmer} have an API that allows us to efficiently implement our main requirements for modules: An initialize once, run often lifecycle. Unfortunately, \inl{wamr}'s API is less suitable to that task and it may be part of why it lacks in performance. It has the lowest throughput of Wasm executors in I/O- and CPU-bound workloads, as well as the mixed and realistic workload. The memory usage, on the other hand, is lowest in terms of idle footprint and container size, from a pure numbers perspective. Its API also showed limitations that the others did not have, that is, specifying function imports on a per-module basis is not possible. A certain upside is its support for more instruction set architectures than the others, which may become relevant for heterogeneous edge devices. From a performance perspective however, unless memory is very constrained, it is the least suitable of our selected runtimes.
@@ -50,7 +50,7 @@ Both of these runtimes are perform well under various circumstances, but based o
 % - async I/O 
 % - fine-grained system access (perhaps somewhat comparable to the AWS IAM system)
 
-\subsubsection*{How suitable is WebAssembly for serverless execution?}
+\subsubsection*{RQ5: How suitable is WebAssembly for serverless execution?}
 
 We find WebAssembly to be a very suitable target format for serverless functions. This comes down to a number of points.
 
