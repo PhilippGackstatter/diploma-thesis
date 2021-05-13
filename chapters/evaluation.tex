@@ -343,11 +343,11 @@ While \inl{wamr} seems to be very memory efficient, which it might be, we have t
 \begin{table}[h!]
     \centering
     \begin{tabular}{c | c | c | c}
-        Runtime          Release (LTO) & Release    & Debug\\
+        Runtime          & Release (LTO) & Release    & Debug\\
         \hline
-        \inl{wasmer}     5.5 \times    & 2.7 \times & 1.2 \times\\
-        \inl{wasmtime}   3.5 \times    & 3.5 \times & 1.4 \times\\
-        \inl{wamr}       7.4 \times    & 7.1 \times & 5.3 \times\\
+        \inl{wasmer}     & 5.5 \times    & 2.7 \times & 1.2 \times\\
+        \inl{wasmtime}   & 3.5 \times    & 3.5 \times & 1.4 \times\\
+        \inl{wamr}       & 7.4 \times    & 7.1 \times & 5.3 \times\\
     \end{tabular}
     \caption{The ratio of memory usage for the different module sizes in WebAssembly executors compared to the Docker container runtime.}
     \label{table:docker-wasm-memory-ratio}
