@@ -3,7 +3,7 @@
 
 In this chapter, we lay out the requirements that an implementation of a WebAssembly container runtime should satisfy in general. We introduce several WebAssembly runtimes and pick three of them for our implementation. We then expand on the requirements by looking at OpenWhisk specifically and how we need to modify it to enable our new container runtime, but also detail other approaches that could be used to run WebAssembly workloads. Finally, we describe and discuss our concrete implementation in Apache OpenWhisk, how to achieve fast cold starts and high performance, while also examining the trade-offs involved.
 
-\section{Core approach}
+\section{Core Approach}
 
 As we have seen in the previous chapter, there are a number of issues with serverless in general, but also serverless on the edge. In this section we will summarize the core problem and describe our idea for rectifying these issues to make serverless (edge) computing more viable.
 
@@ -36,7 +36,7 @@ Finding a suitable serverless framework that we can modify and integrate with, w
 
 We use Apache OpenWhisk as the framework to implement WebAssembly support for. OpenWhisk is a production-ready framework, used as the basis for IBM's Cloud Functions. Thus, implementing Wasm support in OpenWhisk would show the viability of the approach in the real world. The framework is also frequently used by serverless researchers to implement new ideas such as pause containers to reduce cold start times \cite{Mohan2019} or Wasm support via \inl{node.js} \cite{Hall2019}, making it a well-respected and frequently used framework. OpenWhisk also has \emph{lean} components, which are lighter-weight replacements for its heavier ones, such as Kafka. These enable OpenWhisk to be deployed on edge devices, such as Raspberry Pis, on which we plan to evaluate our implementation. Furthermore, because OpenWhisk is already designed to be easily extensible with new language runtimes, the protocol is straightforward to implement.
 
-\section{WebAssembly runtimes}
+\section{WebAssembly Runtimes}
 \label{section:wasm-runtimes}
 
 WebAssembly is a specification\footnote{\url{https://webassembly.org/specs/}} and implementations adhering to it are WebAssembly runtimes. Since Wasm was originally designed for the web, the virtual machines of browsers, such as Google's V8 or Mozilla's SpiderMonkey, can also execute WebAssembly in addition to JavaScript. With the rise of Wasm outside the Web, a large number of standalone runtimes have emerged and many are actively being developed. This section introduces a number of runtimes with different compilation strategies, and justify our choice of runtimes to implement in our executor.
@@ -99,7 +99,7 @@ A summary of the runtimes we looked at can be found in Table \ref{table:wasm-run
 In this section we examine the possibilities for bringing WebAssembly support to OpenWhisk.
 In the rest of this section we will explore the available options and discuss them in the context of these requirements.
 
-\subsection{OpenWhisk's anatomy}
+\subsection{OpenWhisk's Anatomy}
 
 In order to understand the requirements for our Wasm-flavored OpenWhisk, we need to understand the design of OpenWhisk itself first.
 
@@ -179,7 +179,7 @@ The executor also needs to be generally fast, in order to aid in alleviating the
 
 % Figure that shows a zoomed-in version of the invoker and its SPIs (as well as the Wasm executor?) - Help better understand OW's design and what we added
 
-\section{Executor implementation}
+\section{Executor Implementation}
 
 
 To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based \inl{Invoker} will be replaced, to forward all the incoming requests to our new Wasm executor.
@@ -235,21 +235,21 @@ It follows, that actual work only happens in the endpoints, which are parameteri
 
 % Finally, we give \inl{tide} a function pointer for each endpoint and listen on a local address.
 
-\subsection{Fast cold starts}
+\subsection{Fast Cold Starts}
 In serverless platforms we can identify three important steps, in order for code to be executed. Uploading the code to the platform, initializing the execution environment, and running it. The latter two steps are already part of the execution path; they occurr when an execution request is actively waiting for the result to be returned. Thus, during initialization, the action should already be well-optimized for execution such that as little preparation as possible is needed. WebAssembly is binary target format, however not one, that is ready for \emph{fast} execution. It can be interpreted right away -- thus a small cold start time -- but execution performance will lack behind massively compared to native code, which is unacceptable. So compilation to native code is essential for good runtime performance, but it also takes time for that to be applied to a Wasm module. Given this trade-off, it would seem that just-in-time compilation should be the best model. In \inl{wasmtime}, our JIT-runtime of choice, compilation of a simple, WASI-enabled module (1,6 MB) still takes 35 milliseconds on our test machine (or 40 milliseconds when optimizing for speed). This time represents 98\% of the entire setup time, including every other part of the runtime. Thus, unsuprisingly, the cold start is defined almost entirely by the compilation phase. For comparison, the cold start time of the \inl{hello-world} Docker image on the same machine is 452 milliseconds. This number is roughly in line with the cold start times of AWS Lambda or Google Cloud Function, that we have cited in Chapter \ref{chapter:background}. While the JIT cold start is an order of magnitude faster than the startup times of Docker containers, it is arguably still on the same order of magnitude as the execution time of some actions. Given that the compilation phase takes up such a big chunk of the overall time, it is the most obvious starting point for further optimizations. And there is room for improvement.
 
 In contrast to browsers, which receive JavaScript or WebAssembly just-in-time, and thus need to compile it in the same manner, a serverless platform takes ownership of a module earlier. When a user uploads a module, the platform has an almost unconstrained amount of time to apply optimizations to the module thereby making it ready for a fast startup \emph{and} execution; solving the previously described dilemma. Thus, the key is to run the expensive module creation ahead of the time of execution. It does not matter in this case, whether the actual compilation strategy of the underlying runtime is JIT or AoT. It is obvious for AoT - the code needs to be compiled ahead-of-time in its entirety, by definition. As we have seen, JIT also has a cold start penalty and we can complete that step ahead-of-time, too. We refer to this as precompilation. Once the module is precompiled, we can serialize it and store it in the database. During initialization, all that is left to do is to deserialize precompiled bytes into a \inl{Module} and keep it in memory, which is a very fast operation. At the time of execution, the module is ready to produce an instance and execution can start immediately.
 
 Both \inl{wasmer} and \inl{wamr} support AoT compilation. \inl{wasmer} in particular, allows us to leverage \inl{LLVM} for highly optimized native code to produce a shared object. The runtime loads this via a fast \inl{dlopen} call. \inl{wamr} produces its own AoT format which it can deserialize at runtime and achieve a fast startup as well. For \inl{wasmtime} it is the same in all but the name. We can run the relatively expensive module creation ahead-of-time, and serialize and store the result. Thus, all the runtimes can support some form of precompilation.
 
-\subsection{Warm starts}
+\subsection{Warm Starts}
 
 Even though the cold start of our executor is well-optimized with this technique, cold starting for every single invocation would still be too expensive for sequential invocations. After all, the \inl{init} procedure still requires retrieving the module from the database and copy it to the executor. We can save on that too, by simply taking advantage of OpenWhisk's current design. In order to adhere to it, we need to store the module between \inl{init} and \inl{run}. The advantage of that is, of course, that after the initialization, \inl{run} can be called again and again, without having to go through any of the setup. This is how OpenWhisk works with Docker containers already. After the initial cold start and first invocation, OpenWhisk pauses the container. If another subsequent request to the same action comes in, it unpauses the container and the action invocation experiences a so-called warm start. This scenario skips the expensive cold start and is much faster. After a threshold without any invocations -- which defaults to 10 minutes -- OpenWhisk calls the \inl{destroy} function on the container, removing it entirely.
 Thus, by adhering to OpenWhisk's design, we have support for fast warm starts as well.
 
 The advantage of keeping a module in the executor's memory, is that it is already deserialized and new instances can be instantiated from it immediately. An instance is the runtime's representation of a callable Wasm module. If a module is the equivalent of a Docker image, then the instance is the running Docker container. Note that, unlike Docker-based OpenWhisk, we do not keep instances (containers) in-memory, but only the modules (images). The cost of instantiating an instance is negligible. On our test machine it took, on average, 340 microseconds to setup a \inl{wasmtime} instance and the parts needed for execution. This represents the overhead on every warm invocation. Moreover, two instances can execute concurrently, even if the module itself is not thread-safe, for instance when reentrant execution would be unsafe. Finally, implemented this way, it would also be safe to execute two requests from different users, since instances are isolated from each other. They operate on their own memory space and have their own WASI environment. Thus, caching modules rather than instances is a good trade-off.
 
-\subsection{The WasmRuntime abstraction}
+\subsection{The WasmRuntime Abstraction}
 
 \begin{listing}[ht]
     \begin{minted}{rust}
@@ -382,7 +382,7 @@ An overview of the entire executor workflow can be seen in Figure \ref{fig:execu
 
 
 
-\subsection{Enabling concurrency}
+\subsection{Enabling Concurrency}
 
 % For former type, \inl{async} Rust is an excellent choice, while it may not be ideal for the latter. There is a fundamental trade-off here. If the executor only worked with OS threads, it could support a much smaller number of blocking requests.
 
@@ -444,7 +444,7 @@ In Figure \ref{fig:default_vs_thread_pool_mixed} a mixed scenario is run, where 
 % Thread pools can mitigate some of these costs, but not enough to support massive IO-bound workloads.
 % We're basically back to thread pools with the spawn_blocking. I.e. async Wasm execution will be necessary to facilitate more blocking tasks on the same host than threads would be able to handle. Wasmtime has some async support, need to look at that more closely. 
 
-\subsection{Implementation alternatives}
+\subsection{Implementation Alternatives}
 
 Instead of caching modules we may wish to cache instances instead. The case for reusing instances is to avoid costly setup in the action itself, like connection pools to external resources or to avoid rebuilding a cache on every request.
 We need to manage instances in that case, i.e. we need a pool of instances and a management system around it. When a new request comes in, we would ideally like to reuse an existing instance. That requires synchronizing with other threads, to decide which thread gets to reuse an instance and which needs to create a new one. We would need per-instance synchronization to check whether an instance is currently in use or usable. It is questionable whether the synchronization overhead would be less costly than always creating a new instance, in particular because creating instances is a relatively cheap operation. 

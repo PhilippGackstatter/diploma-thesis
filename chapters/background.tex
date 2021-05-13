@@ -3,7 +3,7 @@
 
 In this chapter we establish a common background for serverless computing and WebAssembly.
 
-\section{Serverless computing}
+\section{Serverless Computing}
 
 \subsection{Function-as-a-Service}
 
@@ -16,7 +16,7 @@ As much as serverless is an evolution of one area of cloud computing, it is an a
 
 \citeauthor{McGrath2017} describe serverless as the manifestation of the idea, that applications are defined by events and the actions they trigger \cite{McGrath2017}. Events can be a rule firing, a file being uploaded to a storage system or an edge device measuring sensor data and posting it via HTTP. If many events occur at once, the serverless platform is able to scale-up to meet the demand. Serverless is also ideal if no events occur, because no cost for the user is incurred. Serverless platforms are able to offer that, because they follow the scale-to-zero principle: functions that are not used do not take up resources.
 
-\subsection{Serverless architecture}
+\subsection{Serverless Architecture}
 
 \begin{figure}
     \includegraphics[width=\textwidth]{figures/ServerlessArchitecture.pdf}
@@ -58,7 +58,7 @@ Serverless computing can be the enabler for edge computing. But some of its orig
 
 IBM has reacted to these changed requirements and introduced Edge Functions on the IBM Cloud Internet Services \cite{Farid2019}. This offering allows developers to run code closer to the user by deploying functions to their edge network. As a consequence of the resource constraints of edge devices, their offering uses the JavaScript V8 engine and its isolates feature. This is a similar step as moving to a WebAssembly executor, i.e. using a less costly sandboxing mechanism than containers to account for the resource constraints on the edge. Some of their serverless edge computing use cases include »personalized user experiences through conditional routing and originless responses.« The latter means returning responses directly form the edge without going all the way to the cloud \cite{IBM2021}. This leads to another use case: increased API responsiveness through aggregation and caching from multiple cloud-based API endpoints.
 
-\subsection{Serverless workload}
+\subsection{Serverless Workload}
 \label{section:serverless_workload}
 
 Since we aim to redesign the fundamental building block of a serverless framework, namely the underlying container runtime, it is important to examine what the serverless workload looks like. Here, we provide an overview of the research in this area.

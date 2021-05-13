@@ -3,7 +3,7 @@
 
 In this chapter we look at approaches for reducing cold starts such as improvements to the traditional container runtime but also including WebAssembly.
 
-\section{Incremental approaches}
+\section{Incremental Approaches}
 
 These approaches attempt to work around the limitations of OS-level virtualization with additional techniques, typically implementing some form of cache or pre-fetching. Thus, they can be seen as incremental improvements.
 
@@ -40,7 +40,7 @@ This approach is independent of the underlying container runtime. Although Wasm 
 
 \section{WebAssembly in Serverless}
 
-\subsection{Wasm with Node.js}
+\subsection{Execution in node.js}
 
 We built our work on previous research that built a WebAssembly-based serverless runtime. \citeauthor{Hall2019} use the V8\footnote{\url{https://v8.dev/}} engine's WebAssembly support within \inl{node.js} as their basis.
 Since V8 implements the WebAssembly standard like any other runtime, it has the same guarantees in terms of security. In particular, V8 \emph{contexts} provide isolation between different executing WebAssembly modules. Thus, for each request their implementation creates a new context where the WebAssembly module is loaded, executed via the V8 API, the result returned and the context destroyed.
