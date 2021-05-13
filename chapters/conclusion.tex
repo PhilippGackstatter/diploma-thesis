@@ -37,7 +37,7 @@ Both \inl{wasmtime} and \inl{wasmer} have an API that allows us to efficiently i
 It then comes down to the other two runtimes. The main advantage of \inl{wasmer} is its ahead-of-time compilation that produces very high quality native code, evident by its performance in CPU-bound workloads. This seems to be coupled with being 47\% slower in cold starts than \inl{wasmtime}, which handles this task particularly well. On the Raspberry Pi and in a mixed workload, the margin to \inl{wasmer} is slimmer than on the server.
 In our realistic workload, \inl{wasmer} showed that the slower cold start did not saliently affect its throughput compared to \inl{wasmtime}, while Docker did show its performance noticeably linked to its cold start.
 Both runtimes support primarily \inl{x86\_64} and \inl{aarch64}, which covers a wide range of devices, but particularly \inl{arm32} support is missing as yet. How relevant that is depends on the planned use of the serverless platforms and whether its worker nodes would run on devices with that or other ISAs.
-Both of these runtimes are perform well under various circumstances, but based on our general-purpose mixed and realistic workloads \inl{wasmer} takes the lead, even with a slightly higher memory usage.
+Both of these runtimes perform well under various circumstances, but based on our general-purpose mixed and realistic workloads, \inl{wasmer} takes the lead, even with a slightly higher memory usage.
 
 % I think we can add another RQ about architectural and systems aspects to integrate a wasm runtime with a serverless framework
 
@@ -96,7 +96,7 @@ The key takeaway is that WebAssembly proves to be a suitable target format due t
 
 There are a number of open challenges to create a fully production-ready WebAssembly container runtime.
 
-Even though WebAssembly has left the experimental phase and is standardized, so far it is only an MVP; a minimum viable product. Some important features are proposed but not yet implemented. These include interface types, i.e. passing complex types from host to module or module to module, multi-threading and atomics or a garbage collector (GC), which will make it easier for GC'ed languages to be compiled to Wasm.
+Even though WebAssembly has left the experimental phase and is standardized, so far it is only a \emph{minimum viable product}. Some important features are proposed but not yet implemented. These include interface types, i.e. passing complex types from host to module or module to module, multi-threading and atomics or a garbage collector (GC), which will make it easier for GC'ed languages to be compiled to Wasm.
 
 We also previously mentioned running WASI functions asynchronously, which would allow for non-blocking I/O and thus much better performance for I/O-bound workloads. This will be added to \inl{wasi-cap-std-sync} and will then be usable by WebAssembly runtimes that implement support for it, like \inl{wasmtime}. For other runtimes, which do not build on this library, it is unclear if and when support will land.
 
@@ -106,7 +106,7 @@ Our executor is stateless without exception, that is, each function is executed 
 
 At the end of Chapter \ref{chapter:design} we concluded that neither of the threading models we examined was strictly superior. If a priori knowledge exists about the type of workload, then we may wish to run multiple \inl{Invoker}s with different threading models. If the workload type is annotated on the function, the load balancer could dispatch to the most appropriate \inl{Invoker} and improve performance.
 
-While we have seen great leaps in performance on a Raspberry Pi, the cold start times of just the executor are still beyond 100 ms. This is on the same order of magnitude that current FaaS offerings perform on, but as we explored previously, it may not be fast enough for latency-critical applications. Therefore, other techniques like those explored in the related work may need to be implemented to bring the startup latency further down.
+While we have seen great leaps in performance on a Raspberry Pi, the cold start times of just the executor are still beyond 100 ms. This is on the same order of magnitude that current FaaS offerings perform on, although on more powerful hardware. Regardless, it may not be fast enough for latency-critical applications at the edge. Therefore, other techniques like those explored in the related work may need to be implemented in conjunction with our approach to bring the startup latency further down.
 
 % keep-alive
 % improve performance on Raspberry Pi further, since 112-274ms on average
