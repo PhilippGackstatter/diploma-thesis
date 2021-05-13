@@ -25,7 +25,7 @@ Some of the requirements for a WebAssembly container runtime are a direct conseq
     \item Be programming-language agnostic.
     \item Provide a cheap sandboxing mechanism to ensure multi-tenant capability and no adverse effects on the cold start latency.
     \item Be as close to native speed as possible to be a viable alternative to existing container runtimes.
-    \item Run on devices with potentially different instruction set architectures (at least \inl{x86\_64} and \inl{ARM}).
+    \item Run on devices with potentially different instruction set architectures (at least \inl{x86\_64} and \inl{arm}).
     \item Be able to efficiently handle a large amount of I/O concurrently, due to all requests being proxied through.
     \item Be thread-safe.
 \end{enumerate}
@@ -44,17 +44,17 @@ WebAssembly is a specification\footnote{\url{https://webassembly.org/specs/}} an
 
 \subsection{Wasmtime}
 
-Wasmtime\footnote{\url{https://github.com/bytecodealliance/wasmtime}} is a runtime that has support for Just-in-Time compilation, available for the x86\_64 and aarch64 instruction set architectures (ISA). It is written in Rust and thus easily embeddable from there. Support for the latest WASI standards and future proposals for Wasm are implemented.
+Wasmtime\footnote{\url{https://github.com/bytecodealliance/wasmtime}} is a runtime that has support for Just-in-Time compilation, available for the \inl{x86\_64} and \inl{aarch64} instruction set architectures (ISA). It is written in Rust and thus easily embeddable from there. Support for the latest WASI standards and future proposals for Wasm are implemented.
 It is developed as part of the Bytecode Alliance\footnote{\url{https://bytecodealliance.org/}}, with founding members like Mozilla, fastly, Intel and RedHat. The \inl{cranelift} code generator is developed as part of the alliance and \inl{wasmtime} uses it for Just-in-Time compilation. The code generator's documentation points out that the backend for \inl{x86\_64} is »the most complete and stable; other architectures are in various stages of development \cite{Alliance2021}.« 
 Thus it will most likely run on an \inl{aarch64} Raspberry Pi, but performance may not be on-par with an \inl{LLVM}-based runtime.
 
 \subsection{Lucet}
 
-Lucet\footnote{\url{https://github.com/bytecodealliance/lucet}} is the compiler and runtime used for cloud provider fastly's Terrarium, a platform for running WebAssembly on edge devices \cite{fastly2019}. It consists of a compiler and a runtime to execute WebAssembly. The compiler, \inl{lucetc}, compiles Wasm modules to native object or shared object files. The complementary \inl{lucet-runtime} can then load the native code and call the contained Wasm functions. Because of this compilation model, execution can reach near-native speeds. However, the execution is not sandboxed by default, requiring mechanisms like \inl{seccomp-bpf}\footnote{\url{https://wiki.mozilla.org/Security/Sandbox/Seccomp}}, and the security model is actively being developed. It is currently only available on the \inl{x86\_64} ISA. Since we require support for edge devices, typically built on the arm ISA, we will not be using \inl{lucet}. Furthermore, the lack of mature sandboxing makes other runtimes a better choice.
+Lucet\footnote{\url{https://github.com/bytecodealliance/lucet}} is the compiler and runtime used for cloud provider fastly's Terrarium, a platform for running WebAssembly on edge devices \cite{fastly2019}. It consists of a compiler and a runtime to execute WebAssembly. The compiler, \inl{lucetc}, compiles Wasm modules to native object or shared object files. The complementary \inl{lucet-runtime} can then load the native code and call the contained Wasm functions. Because of this compilation model, execution can reach near-native speeds. However, the execution is not sandboxed by default, requiring mechanisms like \inl{seccomp-bpf}\footnote{\url{https://wiki.mozilla.org/Security/Sandbox/Seccomp}}, and the security model is actively being developed. It is currently only available on the \inl{x86\_64} ISA. Since we require support for edge devices, typically built on the \inl{arm} ISA, we will not be using \inl{lucet}. Furthermore, the lack of mature sandboxing makes other runtimes a better choice.
 
 \subsection{Wasmer}
 
-Wasmer\footnote{\url{https://github.com/wasmerio/wasmer}} is a WebAssembly runtime with support for the three major platforms and \inl{x86\_64} and \inl{aarch64} ISAs. Notably, wasmer has already reached version \inl{1.0}, indicating a certain level of maturity. The runtime offers three different compilers, \inl{singlepass}, \inl{cranelift} and \inl{LLVM}, whose compilation times get slower and execution times get faster, in that order, respectively. The runtime has a JIT and a native engine, which differ in the way the module is loaded. In particular, the native engine produces a shared object, which can be loaded with a fast \inl{dlopen} call. The support for high-quality AoT compilation with \inl{LLVM} and fast startup times makes wasmer a promising choice for our purpose.
+Wasmer\footnote{\url{https://github.com/wasmerio/wasmer}} is a WebAssembly runtime with support for the three major platforms and \inl{x86\_64} and \inl{aarch64} ISAs. Notably, \inl{wasmer} has already reached version \inl{1.0}, indicating a certain level of maturity. The runtime offers three different compilers, \inl{singlepass}, \inl{cranelift} and \inl{LLVM}, whose compilation times get slower and execution times get faster, in that order, respectively. The runtime has a JIT and a native engine, which differ in the way the module is loaded. In particular, the native engine produces a shared object, which can be loaded with a fast \inl{dlopen} call. The support for high-quality AoT compilation with \inl{LLVM} and fast startup times makes \inl{wasmer} a promising choice for our purpose.
 
 \subsection{WASM3}
 
@@ -64,7 +64,7 @@ Due to Wasm's simplicity in the binary format, there is wide-spread interest for
 
 However, there is still value in runtimes written specifically for embedded devices. The WebAssembly Micro Runtime\footnote{\url{https://github.com/bytecodealliance/wasm-micro-runtime/}} (\inl{wamr}) has support for all three of the mentioned compilation strategies. It has low memory usage and binary size. For example, the claimed binary size of the AoT runtime is just 50 kilo bytes. Further, the AoT runtime claims near-native speed. For execution on edge devices, where memory is scarce, this runtime may allow more modules to be kept in-memory compared to heaver-weight runtimes.
 
-A summary of the runtimes we looked at can be found in table \ref{table:wasm-runtime-overview}. The diversity of compilation strategies sticks out -- clearly no single mode is the best for all scenarios. Except for \inl{lucet}, all runtimes have good platform support. However, particularly for edge devices, the lack of support for the 32-bit arm architecture can be challenging in the Rust-written runtimes (\inl{wasmtime}, \inl{wasmer}, \inl{lucet}). The support in the other ones, written in C, is there.
+A summary of the runtimes we looked at can be found in table \ref{table:wasm-runtime-overview}. The diversity of compilation strategies sticks out -- clearly no single mode is the best for all scenarios. Except for \inl{lucet}, all runtimes have good platform support. However, particularly for edge devices, the lack of support for the 32-bit \inl{arm} architecture can be challenging in the Rust-written runtimes (\inl{wasmtime}, \inl{wasmer}, \inl{lucet}). The support in the other ones, written in C, is there.
 
 \newcommand{\linux}{\input{icons/linux.pdf_tex}}
 \newcommand{\macos}{\input{icons/macos.pdf_tex}}
@@ -129,7 +129,7 @@ That implies that the container is not destroyed immediately after it has been i
 OpenWhisk can be deployed on a Kubernetes cluster, a container orchestration tool for automating deployment and scaling of containers \cite{Kub2021}. OpenWhisk has a service provider interface (SPI) called \inl{ContainerFactoryProvider}, which represents the underlying container management platform. It provides two implementations of that SPI \cite{OWKub2020}.
 
 \begin{enumerate}
-    \item The \inl{DockerContainerFactory} implements the architecture shown above, except that most components of OpenWhisk run in separate Kubernetes pods. In non-Kubernetes deployments, they usually run in separate Docker containers. The crucial part of this deployment is that the Invoker runs in a single pod and also spawns all of the docker containers inside that pod. Multiple Invokers can run on different worker nodes. Because OpenWhisk talks directly to the local Docker daemon, container management latency is rather small, but this SPI implementation does not take advantage of Kubernetes' scaling mechanisms.
+    \item The \inl{DockerContainerFactory} implements the architecture shown above, except that most components of OpenWhisk run in separate Kubernetes pods. In non-Kubernetes deployments, they usually run in separate Docker containers. The crucial part of this deployment is that the \inl{Invoker} runs in a single pod and also spawns all of the Docker containers inside that pod. Multiple \inl{Invoker}s can run on different worker nodes. Because OpenWhisk talks directly to the local Docker daemon, container management latency is rather small, but this SPI implementation does not take advantage of Kubernetes' scaling mechanisms.
     \item The \inl{KubernetesContainerFactory} is the counterpart. It interfaces with the Kubernetes API to create and schedule actions in containers -- in turn contained in pods -- to run on different Kubernetes worker nodes. This trades higher container management latency for access to Kubernetes' scaling and scheduling mechanisms.
 \end{enumerate}
 
@@ -168,7 +168,7 @@ The first approach allows us to integrate Wasm into OpenWhisk with fewer changes
 \begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/WasmOpenWhiskActionInvocationFlow.pdf}
-    \caption{Invocation flow of a Wasm action in our modified Apache OpenWhisk. The Invoker \emph{injects} the code into the executor which \emph{creates} a Wasm Module ready for execution. It then \emph{instructs} the executor to \emph{invoke} the module with the parameters it passes. The result is passed back to the Invoker. Again, a deployer can define whether one or more Invokers exist.}
+    \caption{Invocation flow of a Wasm action in our modified Apache OpenWhisk. The \inl{Invoker} \emph{injects} the code into the executor which \emph{creates} a Wasm module ready for execution. It then \emph{instructs} the executor to \emph{invoke} the module with the parameters it passes. The result is passed back to the Invoker. Again, a deployer can define whether one or more Invokers exist.}
     \label{fig:wasm-openwhisk-action-invocation-flow}
 \end{figure}
 
@@ -182,13 +182,13 @@ The executor also needs to be generally fast, in order to aid in alleviating the
 \section{Executor implementation}
 
 
-To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based invoker will be replaced, to forward all the incoming requests to our new Wasm executor.
+To implement these requirements in Apache OpenWhisk we will take the following steps. The current Docker-based \inl{Invoker} will be replaced, to forward all the incoming requests to our new Wasm executor.
 
 The Wasm executor will be written from scratch in the Rust\footnote{\url{https://www.rust-lang.org/}} programming language. There are a number of reasons for this choice.
 
 \begin{itemize}
     \item It is a compiled language with performance similar to that of C or C++.
-    \item The Rust compiler uses LLVM as its backend so Rust programs can be compiled for any architecture we care about, in particular also \inl{aarch64}. Moreover, we can also compile to \inl{wasm32-wasi}, the WebAssembly WASI target. This allows us to write highly performant WebAssembly modules in Rust, such that we can test our executor \emph{and} the Docker actions under the best possible conditions.
+    \item The Rust compiler uses \inl{LLVM} as its backend so Rust programs can be compiled for any architecture we care about, in particular also \inl{aarch64}. Moreover, we can also compile to \inl{wasm32-wasi}, the WebAssembly WASI target. This allows us to write highly performant WebAssembly modules in Rust, such that we can test our executor \emph{and} the Docker actions under the best possible conditions.
     \item It has good support for asynchronous I/O, so Rust web frameworks can efficiently handle a large amount of concurrent requests.
     \item Program correctness is one of Rust's primary goals, which is enabled through a large amount of guarantees that can be checked at compile time. In particular, writing memory-safe programs is much easier than in C or C++, while providing a similar level of performance.
     \begin{itemize}

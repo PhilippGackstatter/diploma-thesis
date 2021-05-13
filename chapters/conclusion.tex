@@ -105,7 +105,7 @@ Sharing resources fairly among tenants is important for serverless frameworks. W
 
 Our executor is stateless without exception, that is, each function is executed in a new \inl{Instance}. Some functions, however, may wish to cache data from an external service in memory to improve latency. A fully stateless system does not allow for such optimizations, while caching \inl{Instance}s rather than \inl{Module}s and invoking them repeatedly would.
 
-At the end of Chapter \ref{chapter:design} we concluded that neither of the threading models we examined was strictly superior. If a priori knowledge exists about the type of workload, then we may wish to run multiple invokers with different threading models. If the workload type is annotated on the function, the load balancer could dispatch to the most appropriate invoker and improve performance.
+At the end of Chapter \ref{chapter:design} we concluded that neither of the threading models we examined was strictly superior. If a priori knowledge exists about the type of workload, then we may wish to run multiple \inl{Invoker}s with different threading models. If the workload type is annotated on the function, the load balancer could dispatch to the most appropriate \inl{Invoker} and improve performance.
 
 While we have seen great leaps in performance on a Raspberry Pi, the cold start times of just the executor are still beyond 100 ms. This is on the same order of magnitude that current FaaS offerings perform on, but as we explored previously, it may not be fast enough for latency-critical applications. Therefore, other techniques like those explored in the related work may need to be implemented to bring the startup latency further down.
 
