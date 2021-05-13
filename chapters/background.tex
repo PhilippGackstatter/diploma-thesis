@@ -165,7 +165,7 @@ In order to open a file, the module needs to call functions accessing the file, 
 
 \subsection{Execution}
 
-Just like Java Bytecode needs a JVM, Wasm needs a runtime as well. Since WebAssembly itself is just a specification, we need a concrete implementation to execute a module. There are many implementations available, the most used ones likely being those in the major browser JavaScript engines. However, since we do not need support for JavaScript in this work, we choose to use standalone runtimes. The absence of JavaScript support may also provide a smaller runtime. Those come with different execution engines and goals. Wasm can be interpreted, just-in-time compiled or compiled to native code, ahead-of-time. All of these have different properties in terms of their cold-start latency as well as their runtime performance. We will discuss and select concrete runtimes in Chapter \ref{chapter:design}.
+Just like Java Bytecode needs a JVM, Wasm needs a runtime as well. Since WebAssembly itself is just a specification, we need a concrete implementation to execute a module. There are many implementations available, the most used ones likely being those in the major browser JavaScript engines. However, since we do not need support for JavaScript in this work, we choose to use standalone runtimes. The absence of JavaScript support may also provide a smaller runtime. Those come with different execution engines and goals. Wasm can be interpreted, just-in-time compiled or compiled to native code, ahead-of-time. All of these have different properties in terms of their cold-start latency as well as their runtime performance. We discuss and select concrete runtimes in Chapter \ref{chapter:design}.
 
 % Potential further discussions:
 % \begin{itemize}
