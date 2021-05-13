@@ -65,7 +65,7 @@ Similar to the preceding approach, a lighter-weight sandboxing is introduced to 
 Cloud provider fastly offers its experimental fastlylabs\footnote{\url{https://www.fastlylabs.com/}}, where its previously mentioned \inl{lucet} WebAssembly runtime can be used inside \emph{Terrarium}, to run Wasm code at the edge \cite{fastly2019}. The \inl{lucet} compiler first translates WebAssembly to native code, after which it can be executed in the complementary runtime. Due to this design -- which spawned the idea for our work -- \inl{lucet} can execute Wasm efficiently on every request, with module instantiation times of 50 microseconds and only kilobytes of memory, according to them.
 
 Even though we did not leverage \inl{lucet} due to security concerns as well as platform and ISA support, we did use the idea of precompiling to native code ahead-of-time. This payed off, given that we measured module instantiation times of 340 microseconds to setup a \inl{wasmtime} instance from a module. Without this, we also would not have achieved cold starts of around 10 milliseconds in that runtime.
-Fastly has joined the Bytecode Alliance\footnote{\url{https://bytecodealliance.org/}}, under whose umbrella \inl{wasmtime} is developed, and \inl{lucet} is being integrated into \inl{wasmtime} to provide Ahead-of-Time compilation \cite{Hickey2020}. This might bring the AoT performance into the realm of \inl{wasmer}'s.
+Fastly has joined the Bytecode Alliance\footnote{\url{https://bytecodealliance.org/}}, under whose umbrella \inl{wasmtime} is developed, and \inl{lucet} is being integrated into \inl{wasmtime} to provide ahead-of-time compilation \cite{Hickey2020}. This might bring the AoT performance into the realm of \inl{wasmer}'s.
 
 \subsection{Faasm}
 
