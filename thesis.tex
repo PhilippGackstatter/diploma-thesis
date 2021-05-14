@@ -126,7 +126,16 @@
 \end{kurzfassung}
 
 \begin{abstract}
-\todo{Enter your text here.}
+
+Serverless computing has become a popular part of the cloud computing model, thanks to abstracting away infrastructure management. It enables any developer to write functions that auto-scale, while only paying when they are invoked. This model is a perfect fit for the unpredictable and on-demand nature of edge computing, such as in the Internet of Things. However, low latency use cases cannot be facilitated due to a significant performance issue.
+
+The first invocation of a function requires creating its execution environment, typically a Docker container. This \emph{cold start} can take hundreds of milliseconds or even multiple seconds under concurrent requests, making serverless with Docker unsuitable for these use cases. Running these platforms on edge devices with limited CPU power and memory available, increases cold start latencies further.
+
+To alleviate this issue, we follow a radical approach and replace Docker with a lighter-weight technology. However, any alternative must offer similar levels of security, language-agnosticism and high performance. A nascent technology, which claims to have these properties, is a target format called WebAssembly. In this work, we examine WebAssembly's suitability for use in a serverless container runtime with a focus on edge computing.
+We choose three WebAssembly runtimes to build our container runtime on top of and present its design to achieve fast cold starts while retaining a high performance.
+
+In the evaluation, we compare the Docker-based OpenWhisk with the three WebAssembly container runtimes in terms of cold start time, general-purpose performance and memory usage. On a Raspberry Pi, we find our WebAssembly container runtimes to achieve 99.5\% faster cold starts than Docker, and 94\% on a server-grade machine. Docker's execution performance is strongly linked to the cold start time, while the throughput of WebAssembly containers is not noticeably susceptible to cold starts. In a mixed CPU- and I/O-bound workload, our container runtimes achieve at least 2.4, and up to 4.2 times the throughput of Docker. Overall, we find WebAssembly to be very suitable for use in serverless platforms due to lightweight isolation, resulting in fast startups, and support for ahead-of-time compilation to fast, native code.
+
 \end{abstract}
 
 % Select the language of the thesis, e.g., english or naustrian.
