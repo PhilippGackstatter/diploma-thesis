@@ -1,7 +1,7 @@
 \chapter{Conclusion}
 \label{chapter:conclusion}
 
-In this work, we implemented a WebAssembly container runtime for Apache OpenWhisk. The main goal was to examine the performance differences between the WebAssembly and Docker container runtimes in terms of cold start latency and execution performance. In this chapter we conclude the work by answering the research questions posed in Chapter \ref{chapter:introduction}.
+In this work, we implemented a WebAssembly container runtime for Apache OpenWhisk. The main goal was to examine the performance differences between the WebAssembly and Docker container runtimes in terms of cold start latency and execution performance. In this chapter, we conclude the work by answering the research questions posed in Chapter \ref{chapter:introduction}.
 
 \section{Research Questions}
 
@@ -15,7 +15,7 @@ Furthermore, we have seen in our tests -- what is also confirmed by other resear
 
 \subsubsection*{RQ2: How do the performance characteristics of the WebAssembly and Docker container runtimes differ?}
 
-In the mixed and realistic workload we can best see the holistic picture because it includes cold starts. Here, the WebAssembly executors are always faster than Docker. In the mixed workload, the WebAssembly executors are between 1.6 and 3$\times$ faster on the server, and 2.4 to 4.2$\times$ faster on the Pi. In the realistic workload, we find Docker's overall performance to be strongly linked to the cold start time. The WebAssembly executors, however, are not noticeably susceptible to cold starts, showing much more consistent behavior. In the realistic workload, \inl{wasmer} takes the lead and processes around 95\% of requests strictly faster than all other container runtimes. For sufficiently long requests, either CPU- or I/O-bound, the cold start time of \inl{wasmer} does not significantly affect its performance, even though it is twice that of \inl{wasmtime} or \inl{wamr}.
+In the mixed and realistic workload we can best see the holistic picture, because it shows the execution performance including cold starts. Here, the WebAssembly executors are always faster than Docker. In the mixed workload, the WebAssembly executors are between 1.6 and 3$\times$ faster on the server, and 2.4 to 4.2$\times$ faster on the Pi. In the realistic workload, we find Docker's overall performance to be strongly linked to the cold start time. The WebAssembly executors, however, are not noticeably susceptible to cold starts, showing much more consistent behavior. In the realistic workload, \inl{wasmer} takes the lead and processes around 95\% of requests strictly faster than all other container runtimes. For sufficiently long requests, either CPU- or I/O-bound, the cold start time of \inl{wasmer} does not significantly affect its performance, even though it is twice that of \inl{wasmtime} or \inl{wamr}.
 % In particular for low number of concurrent requests, Docker scales very poorly compared to Wasm executors, which may be inherent to OpenWhisk as indicated by \cite{??}
 
 For I/O-bound workloads, the used Docker image shows a higher overhead even when the execution time itself is fixed. It confirms that Docker has a higher inherent management cost due to implementing OS-level virtualization, rather than in user space.
@@ -74,7 +74,7 @@ The key takeaway is that WebAssembly proves to be a suitable target format due t
 
 % Two difference actions need two different containers in docker terms. With the Wasm executor, too, but the containers are much lighter weight and can be kept around at less resource costs.
 
-% \citeauthor{Shahrad2020} have found that, on average, 50\% of functions execute for more than 1s, that 80\% of functions execute for more than 100ms, and 9X\% of functions execute for more than 10ms (or similar, perhaps need to do the actual calculations on the data set). Thus our cold start latencies are not on the same order of magnitude as 9X\% of function execution times, but faster.
+% \citeauthor{Shahrad2020} have found that, on average, 50\% of functions execute for more than 1s, that 80\% of functions execute for more than 100 ms, and 9X\% of functions execute for more than 10 ms (or similar, perhaps need to do the actual calculations on the data set). Thus our cold start latencies are not on the same order of magnitude as 9X\% of function execution times, but faster.
 
 % What requests per second can a raspberry handle, how much for a EC2 instance (or similar)? Can we scale up horizontally, vertically?
 
@@ -104,10 +104,10 @@ Sharing resources fairly among tenants is important for serverless frameworks. W
 
 Our executor is stateless without exception, that is, each function is executed in a new \inl{Instance}. Some functions, however, may wish to cache data from an external service in memory to improve latency. A fully stateless system does not allow for such optimizations, while caching \inl{Instance}s rather than \inl{Module}s and invoking them repeatedly would.
 
-At the end of Chapter \ref{chapter:design} we concluded that neither of the threading models we examined was strictly superior. If a priori knowledge exists about the type of workload, then we may wish to run multiple \inl{Invoker}s with different threading models. If the workload type is annotated on the function, the load balancer could dispatch to the most appropriate \inl{Invoker} and improve performance.
+At the end of Chapter \ref{chapter:design}, we concluded that neither of the threading models we examined was strictly superior. If a priori knowledge exists about the type of workload, then we may wish to run multiple \inl{Invoker}s with different threading models. If the workload type is annotated on the function, the load balancer could dispatch to the most appropriate \inl{Invoker} and improve performance.
 
 While we have seen great leaps in performance on a Raspberry Pi, the cold start times of just the executor are still beyond 100 ms. This is on the same order of magnitude that current FaaS offerings perform on, although on more powerful hardware. Regardless, it may not be fast enough for latency-critical applications at the edge. Therefore, other techniques like those explored in the related work may need to be implemented in conjunction with our approach to bring the startup latency further down.
 
 % keep-alive
-% improve performance on Raspberry Pi further, since 112-274ms on average
+% improve performance on Raspberry Pi further, since 112-274 ms on average
 % OpenWhisk issues, 4 container limit, ...
