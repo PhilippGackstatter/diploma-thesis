@@ -51,7 +51,7 @@
     {}                          % No format applied to whole title
     {0pt}                       % No separation between label and title
     {\thesection~·~}            % Start with section number
-    [{\color{BrightPurple}\hrule}]      % Underline with colored ruler
+    [{\hrule}]      % Underline with colored ruler
 
 % Define convenience functions to use the author name and the thesis title in the PDF document properties.
 \newcommand{\authorname}{Philipp Gackstatter} % The author name without titles.
@@ -114,12 +114,10 @@
 \addtitlepage{english} % English title page.
 \addstatementpage
 
-\begin{danksagung*}
-\todo{Ihr Text hier.}
-\end{danksagung*}
-
 \begin{acknowledgements*}
-\todo{Enter your text here.}
+I want to thank Prof. Schahram Dustdar and, in particular, Pantelis Frangoudis, PhD. for being open to the idea of this work and enabling me to write my thesis in a topic I am excited about. Thank you for your guidance and valuable feedback over the course of this work!
+
+I am also grateful to the Rust language community as a whole, whose talks, books and blogs have gotten me into systems programming, which turned out to be a passion of mine. Without this initial spark, this thesis would not have happened. Finally, thank you to Markus Raab who facilitated my Rust journey at TU Wien and beyond, thereby laying a cornerstone of this work, too.
 \end{acknowledgements*}
 
 \begin{kurzfassung}
