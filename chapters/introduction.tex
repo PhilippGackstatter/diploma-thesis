@@ -8,13 +8,13 @@ Hence, application scenarios at the edge involving data analytics \cite{Nastic20
 The edge computing paradigm has emerged as a solution to address these issues.
 Applying the traditional cloud model to the edge, however, does not promise to be an effective solution. Due to the limited resources available, allocating resources like virtual machines or even containers in a fixed manner may prove to be too inefficient \cite{Baresi2019}.
 Instead, a model with a higher resource elasticity is required; one that can scale up and down fast, thereby efficiently using the available resources.
-One approach that implements this is Serverless computing -- most commonly in the form of Function-as-a-Service (FaaS).
+One approach that implements this is serverless computing -- most commonly in the form of Function-as-a-Service (FaaS).
 In this computing model, developers can execute functions without having to specify how the necessary infrastructure is set up. Instead, the allocation of computing resources is automated, which enables a higher elasticity. This property is well-suited to the resource- and energy-constrained environments of edge devices, given that overprovisioning is even less desirable than in the cloud model \cite{Aslanpour2021}.
 Because resources can be utilized whenever required, this model is ideal for event-driven architectures, such as those typically found in Internet of Things scenarios, where the time at which devices require computing resources is unpredictable, e.g. when a sensor receives input or a user presses a button. Therefore, it may happen that at times, a serverless framework receives only a few requests, while at others, it needs to process a large amount of requests, simultaneously.
-To enable this elasticity, one user's function might run on the same host as that of another. To isolate these instances, serverless frameworks make use of OS-level virtualization through containers -- usually of the Docker flavor.
-Next to security, it also enables packaging language runtimes, so developers can write functions almost language-agnostic, and statelessness due to cheap create and destroy operations. However, cheap is relative. Historically, containers have been compared to the heavier-weight virtual machines, where the creation is indeed much more time intensive. However, on the time scale of serverless, where an incoming request ought to be finished as soon as possible, but the container needs to be created first, it turns out to be not so cheap after all. Not pre-allocating resources to avoid overprovisioning is the point of serverless, but that presupposes that the allocation itself is timely.
+To enable this elasticity, one user's function might run on the same host as that of another user. To isolate these instances, serverless frameworks make use of OS-level virtualization through containers -- usually of the Docker flavor.
+Next to security, it also enables packaging language runtimes, so developers can write functions in a language-agnostic manner, and statelessness due to cheap create and destroy operations. However, cheap is relative. Historically, containers have been compared to the heavier-weight virtual machines, where the creation is indeed much more time intensive. However, on the time scale of serverless, where an incoming request ought to be finished as soon as possible, but the container needs to be created first, it turns out to be not so cheap after all. Not pre-allocating resources to avoid overprovisioning is the point of serverless, but that presupposes that the allocation itself is timely.
 
-When a function is first executed, its container must be started -- referred to as the cold start. This can introduce a latency of a few hundred milliseconds to even seconds \cite{Manner2018, Wang2018}. Consider that on average, 50\% of serverless functions execute for less than one second \cite{Shahrad2020}. Thus, the latency observed by the end user can often be double of what the function itself is responsible for. This infrastructure-induced latency is unacceptable for time-sensitive applications, and thereby most user-facing ones.
+When a function is first executed, its container must be started -- referred to as the cold start. This can introduce a latency of a few hundred milliseconds to multiple seconds \cite{Manner2018, Wang2018}. Consider that on average, 50\% of serverless functions execute for less than one second \cite{Shahrad2020}. Thus, the latency observed by the end user can often be double of what the function itself is responsible for. This infrastructure-induced latency is unacceptable for time-sensitive applications, and thereby most user-facing ones.
 To make matters worse, these cold start latencies increase under concurrent workloads -- precisely those supposed to be handled well by serverless platforms \cite{Mohan2019}. Containers were not designed for this use case and the startup time they require is inherent to how they achieve isolation.
 This problem has been partially addressed by keeping containers warm in-between requests; that is, only the first of potentially many invocations incur this cost. However, this is a form of overprovisioning -- though a less severe one -- and therefore opposed to the serverless promise of being able to scale to zero.
 Evidently, this is already a significant problem for the cloud, so applying this approach at the resource-constrained edge, like Amazon Web Services' (AWS) Greengrass\footnote{\url{https://aws.amazon.com/greengrass/}} would only exacerbate the issue.
@@ -22,16 +22,18 @@ As \citeauthor{Nastic2018} point out, the »architectural and design assumptions
 
 % Thus, a serverless computing platform only needs to provide a Wasm runtime for the instruction set architectures of its edge devices.
 
-At the heart of the problem lies the container runtime. A new approach needs to provide similar functionality and guarantees, while offering a more efficient cold start. One nascent technology that could facilitate this radical replacement is called WebAssembly (Wasm).
+At the heart of the problem lies the container runtime, due to its expensive startup procedure. We believe OS-level virtualization to be unsuitable for serverless edge computing and thus follow a radical approach by replacing the container runtime entirely. This new runtime needs to provide similar functionality and guarantees, while offering a more efficient cold start. One nascent technology that could facilitate this is called WebAssembly (Wasm).
 WebAssembly is a portable, binary instruction format for memory-safe, sandboxed execution in a virtual machine \cite{W3C2020}. Its portability means that the compiled WebAssembly modules can be executed wherever a runtime exists.
-Thus, a function can easily be moved between architecturally heterogeneous devices. Its sandboxing features enable Wasm to be used for the execution of arbitrary, user-supplied code without compromising the security of a multi-tenant system. Multiple compilation strategies exist for running WebAssembly, such that it can reach near-native speeds. This is important since once Docker containers are running, they can execute at native speeds or as fast as the language runtime can offer. In the process of alleviating the cold start, we want to avoid suffering a massive loss in execution performance. Finally, these modules can be created and destroyed in a matter of microseconds. The cloud provider fastly has begun offering execution of Wasm code on its FaaS platform through the use of their \inl{lucet} runtime. In its announcement, they write:
+Thus, a function can easily be moved between architecturally heterogeneous devices. Its sandboxing features enable Wasm to be used for the execution of arbitrary, user-supplied code without compromising the security of a multi-tenant system. WebAssembly can be compiled with different strategies, some of them reaching near-native speeds. This is important since a running Docker container can execute at native speeds or as fast as the language runtime allows for. In the process of alleviating the cold start, we have to avoid suffering a loss in execution performance due to an expensive compilation strategy or runtime checks. Finally, these modules can be created and destroyed in a matter of microseconds. The cloud provider fastly has begun offering execution of Wasm code through the use of their custom \inl{lucet} WebAssembly runtime.
+
+In its announcement, they write:
 
 \begin{quote}
   »Lucet can instantiate WebAssembly modules in under 50 microseconds, with just a few kilobytes of memory overhead. By comparison, Chromium’s V8 engine takes about 5 milliseconds, and tens of megabytes of memory overhead, to instantiate JavaScript or WebAssembly programs« \cite{fastly2019}.
 \end{quote}
 
 This gives us a first indication that WebAssembly runtimes does not suffer from a cold start on the same order of magnitude as Docker's.
-In summary, Wasm allows for secure, portable and fast execution. With these properties it may be a good replacement for containers on edge computers. One of the founders of Docker even commented:
+In summary, Wasm allows for secure, portable and fast execution. With these properties it may be a good replacement for containers on edge computers. Solomon Hykes, one of the founders of Docker, even commented:
 
 \begin{quote}
   »If WASM+WASI existed in 2008, we wouldn't have needed to created Docker. That's how important it is. Webassembly on the server is the future of computing« \cite{Hykes2019}.
@@ -53,7 +55,7 @@ Hence, WebAssembly's potential for serverless computing shall be examined more c
 
 \section{Aim of the Work}
 
-The goal of this work is to evaluate the viability of WebAssembly in serverless computing in the context of edge as well as cloud computing. We assess that potential by gathering requirements from the current approaches to serverless, as well as those from edge computing, which supersede the current ones. Based on those, we study several WebAssembly runtimes for their suitability towards our goals. We then discuss two approaches, which would enable WebAssembly to be used in serverless, and implement one of them. Given that WebAssembly runtimes themselves are geared towards different use cases, we leverage three of them and aim to find the one most suitable for our needs. Ultimately, the work is guided by and seeks to answer the following research questions.
+The goal of this work is to evaluate the viability of WebAssembly in serverless computing in the context of edge computing, while also attempting to accommodate the cloud. We assess that potential by gathering requirements from the current approaches to serverless, as well as those from edge computing, which supersede the current ones. Based on those, we study several WebAssembly runtimes for their suitability towards our goals. We then discuss two approaches, which would enable WebAssembly to be used in serverless, and implement one of them. Given that WebAssembly runtimes themselves are geared towards different use cases, we leverage three of them and aim to find the one most suitable for our needs. Ultimately, the work is guided by and seeks to answer the following research questions.
 
 \subsubsection*{RQ1: By how much can WebAssembly runtimes alleviate the cold start latency?}
 
@@ -61,7 +63,7 @@ The first research question examines whether our core hypothesis holds. That is,
 
 \subsubsection*{RQ2: How do the performance characteristics of the WebAssembly and Docker container runtimes differ?}
 
-The goal of the second question is to measure the performance of both container technologies at runtime. More specifically, at what speed can certain workload types be executed? We run CPU- and I/O-bound requests in isolation, to test performance in these specific aspects, but also mixed workloads to test scenarios closer to reality. Moreover, we take the cold start into account in some test runs while isolating it in others to give a holistic picture.
+The goal of the second question is to measure the performance of both container technologies at runtime. More specifically, at what speed can certain workload types be executed? We run CPU- and I/O-bound functions in isolation, to test performance in these specific aspects, but also mixed workloads to test scenarios closer to reality. Moreover, we take the cold start into account in some test runs while isolating it in others to give a holistic picture and examine the effect the cold start has on the overall performance.
 
 \subsubsection*{RQ3: What are the resource costs for keeping containers warm in both container runtimes?}
 
@@ -69,24 +71,25 @@ The third question explores, what the cost of not scaling to zero is, i.e. when 
 
 \subsubsection*{RQ4: Which WebAssembly runtime is the most suitable for use on edge devices?}
 
-The fourth question is directed at finding the WebAssembly runtime best suited for the execution of modules on low-energy and resource-constrained edge devices. We use a Raspberry Pi single-board computer as our example edge device to run our serverless environment on and evaluate the different runtimes from there. All of the preceding measurements as well as our experiences in the design phase are amalgamated to produce an answer to this question.
+The fourth question is directed at finding the WebAssembly runtime best suited for the execution of modules on low-energy and resource-constrained edge devices. We use a Raspberry Pi single-board computer as our example edge device to run our serverless environment on and evaluate the different runtimes from there.
 
 \subsubsection*{RQ5: How suitable is WebAssembly for serverless execution?}
 
-The final question aims to make a conclusion about the suitability of WebAssembly itself, based on our evaluation of multiple runtimes, but not necessarily limited to it. It takes into account what we learn during the literature review as well as the design phase.
+The final question aims to make a conclusion about the suitability of WebAssembly itself, based on our evaluation of multiple runtimes, but not necessarily limited to it. All of the preceding measurements as well as our experiences in the design phase are amalgamated to produce an answer to this question.
 
 \subsection{Terminology}
 
-First, a note on terminology for the rest of this work. Since runtime is a very overloaded term in our context, we may also refer to container runtimes as executors, i.e. the programs responsible for managing containers. Runtime appears also as the word for language runtimes, for example, \inl{node.js} for JavaScript or a Python interpreter.
-WebAssembly runtimes are virtual machines executing WebAssembly code, which is called a WebAssembly module. A WebAssembly module in the context of those runtimes' API means the in-memory representation of such a module. Finally, a WebAssembly container is a more generic term encompassing both a WebAssembly module and the instance produced from it, which is the module in execution.
+Since \emph{runtime} is a very overloaded term in our context, we may also refer to container runtimes as executors, i.e. the programs responsible for managing containers. Runtime also appears as the word for language runtimes, for example, \inl{node.js} for JavaScript.
+WebAssembly runtimes are virtual machines executing WebAssembly code, which is called a WebAssembly module. A module can be instantiated to produce an executable instance. A WebAssembly container is a more generic term encompassing both a WebAssembly module and an instance.
 
 \subsection{Contributions}
 
 The first contribution is a review of the literature, to provide a background for serverless computing in the cloud and at the edge as well as a comprehensive overview of WebAssembly and its salient properties, which make it a viable alternative to Docker for our use case. That includes an assessment of the current research space as to what constitutes serverless use cases and typical workloads, in order to facilitate a realistic evaluation of our system.
 
 The major contribution revolves around modifying an open-source serverless framework, Apache OpenWhisk, to enable the use of such a new container runtime. We explore two auspicious options for bringing WebAssembly support to OpenWhisk and settle for one. At the heart of the work is the implementation of the container runtime using three different WebAssembly runtimes. We discuss the properties the executor needs to fulfill and the design that aims to implement them. Subsequently, we evaluate the three resulting executors against the baseline OpenWhisk vanilla for the cold start latency, the performance under different workload types as well as memory usage for warm containers.
-Our system shows reductions in cold start latencies of 99.5\% on a Raspberry Pi and around 93\% on a server machine. The performance under a realistic workload is up to 4.2$\times$ faster on a server machine, and 3$\times$ as fast as Docker on a Raspberry Pi.
+Our system shows reductions in cold start latencies of 99.5\% on a Raspberry Pi and around 94\% on a server machine. The throughput in a realistic workload is up to 4.2$\times$ more on a server machine, and 3$\times$ more on a Raspberry Pi.
 Finally, we explore alternative approaches to alleviate the cold start problem and conclude with answers to the research questions we posed.
+The source code for our contributions can be found on GitHub\footnote{\url{https://github.com/PhilippGackstatter/wow}}.
 
 
 \section{Structure of the Work}
@@ -97,6 +100,6 @@ In Chapter \ref{chapter:design} we discuss approaches for potential solutions to
 
 In Chapter \ref{chapter:evaluation} we evaluate the system for the cold start latency, different workload types and memory usage in warm containers.
 
-In Chapter \ref{chapter:relatedwork} we examine the current research for other approaches that attempt to solve the cold start problem and discuss the differences to our approach. We also discuss other work that brings WebAssembly to serverless.
+In Chapter \ref{chapter:relatedwork} we examine the current research for other approaches that alleviate the cold start problem and discuss the differences to our approach.
 
-In Chapter \ref{chapter:conclusion} we summarize the results of our work and give an overview of open research questions.
+In Chapter \ref{chapter:conclusion} we summarize the results of our work by answering our research questions and give an overview of open challenges and potential future work.
