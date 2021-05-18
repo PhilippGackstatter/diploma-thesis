@@ -188,7 +188,7 @@ OpenWhisk vanilla manages to handle up to 10 concurrent requests on the Pi, at w
         \inl{wasmer}   & 4.2 & 3.0\\
         \inl{wamr}     & 2.4 & 1.6\\
     \end{tabular}
-    \caption{Average factor by which the respective WebAssembly executors are faster than Docker in the mixed workload scenario.}
+    \caption{The average throughput that the respective WebAssembly executors achieve over to Docker, in the mixed workload scenario.}
     \label{table:pi-pc-load-mixed-improvements}
 \end{table}
 
@@ -254,7 +254,7 @@ Note that using native code in serverless functions is not a particularly popula
 To put this into perspective, we run an experiment to demonstrate the potential improvement WebAssembly can give in comparison to today's prevalent serverless runtime: \inl{node.js}.
 To that end, we write a function in AssemblyScript\footnote{\url{https://www.assemblyscript.org}}, a strict variant of TypeScript\footnote{\url{https://www.typescriptlang.org/}}. TypeScript itself is \emph{typed JavaScript} and a popular way to write programs that compile to JavaScript. Given the widespread support for TypeScript in serverless SDKs such as the AWS SDK\footnote{\url{https://github.com/aws/aws-sdk-js}} or the \emph{serverless}\footnote{\url{https://www.serverless.com/}} framework, we expect most developers who run JavaScript to be actually programming in TypeScript.
 AssemblyScript can compile directly to WebAssembly with the \inl{binaryen} toolchain, that we already use for optimizing our Wasm modules. Because AssemblyScript uses the types from WebAssembly itself as its basis, not all TypeScript code can simply be compiled to WebAssembly. Some minimal changes may be necessary to compile to both targets.
-We set up a sieve of Eratosthenes to calculate prime numbers; a CPU-bound workload. The produced WebAssembly module does not run in all our Wasm executors out of the box, so only \inl{wasmtime} is shown. Calculating prime numbers is a use case where raw performance matters and as such, \inl{wasmtime} completes requests 4.68$\times$ faster. The empirical cumulative distribution function (ECDF) of the results can be seen in Figure \ref{fig:pc-load-prime}. It shows that \inl{wasmtime} performs more consistently than the \inl{node.js} execution, evident by the lesser spread on the former's curve. Given that the WebAssembly code is precompiled, while \inl{node.js} must compile hot code paths just-in-time, this is not surprising. On the other hand, since the sieve is a loop and thus a very hot code path, the loss in performance is surprising.
+We set up a sieve of Eratosthenes to calculate prime numbers; a CPU-bound workload. The produced WebAssembly module does not run in all our Wasm executors out of the box, so only \inl{wasmtime} is shown. Calculating prime numbers is a use case where raw performance matters and \inl{wasmtime} achieves more than 3$\times$ the throughput of \inl{node.js}. The empirical cumulative distribution function (ECDF) of the results can be seen in Figure \ref{fig:pc-load-prime}. It shows that \inl{wasmtime} performs more consistently than the \inl{node.js} execution, evident by the lesser spread on the former's curve. Given that the WebAssembly code is precompiled, while \inl{node.js} must compile hot code paths just-in-time, this is not surprising. On the other hand, since the sieve is a loop and thus a very hot code path, the loss in performance is slightly surprising.
 Thus, for a computationally intensive serverless function written in TypeScript, it may be worth porting it to AssemblyScript, so it compiles to WebAssembly. However, AssemblyScript's goal is \emph{not} to be a TypeScript to WebAssembly compiler but rather an extension to the web ecosystem, complementing TypeScript and JavaScript. As programming languages go, AssemblyScript is still fairly young. While it shows that the accessibility to write source code which compiles to WebAssembly is lower than using systems programming languages like C or Rust, whether it could eventually act as a general-purpose language to write serverless WebAssembly, is uncertain.
 
 In light of this experiment and the preceding one, a fully CPU-bound WebAssembly module reaching 88\% of the performance of a native binary in Docker, but with much reduced startup costs, would seem to be an acceptable compromise.
@@ -317,7 +317,7 @@ The resulting sizes of the Wasm modules and the native binaries are given in Tab
         Release       & 1.51 MiB (\times 4.83)  & 3.80 MiB (\times 1.89)\\
         Debug         & 4.76 MiB (\times 15.25) & 6.46 MiB (\times 3.21)\\
     \end{tabular}
-    \caption{Size of the hash module when compiled to \inl{wasm32-wasi} and \inl{x86\_64-unknown-linux-musl} targets respectively. To provide three different container sizes we use release mode with LTO and without as well as debug mode. The factors of increase over the release with LTO are also given.}
+    \caption{Size of the hash module when compiled to \inl{wasm32-wasi} and \inl{x86\_64-unknown-linux-musl} targets respectively. To provide three different container sizes we use release mode with LTO and without as well as debug mode. The relative size increase over the release with LTO are also given.}
     \label{table:hash-binary-size}
 \end{table}
 

@@ -41,6 +41,7 @@
 
 % Hyphenation
 \hyphenation{Web-As-sem-bly}
+\hyphenation{leicht-ge-wich-tigen}
 
 \definecolor{friendlybg}{HTML}{f0f0f0}
 \newcommand{\inl}[1]{\colorbox{friendlybg}{\texttt{#1}}}
@@ -128,7 +129,7 @@ Beim ersten Aufruf einer Funktion muss dessen Ausführungsumgebung gestartet wer
 
 Um dieses Problem zu beheben verfolgen wir einen radikalen Ansatz, bei dem Docker, die de-facto Standard Serverless Runtime, gänzlich durch eine leichtgewichtigere Technologie ersetzt wird. Jede Alternative muss eine ähnliche Sicherheit, Sprachunabhängigkeit und Performance bieten. WebAssembly ist eine aufkommende Technologie die diese Eigenschaften bereitzuhalten scheint. Daher untersuchen wir in dieser Arbeit die Eignung von WebAssembly in einer Serverless Container Runtime mit einem Fokus auf Edge Computing. Dazu modifizieren wir das Serverless Framework Apache OpenWhisk und wählen drei WebAssembly Runtimes aus, um unsere Container Runtime darauf aufzubauen. Insbesondere wird dabei dessen Design diskutiert, mit dem schnelle Kaltstarts bei hoher Performance erzielt werden können.
 
-Wir vergleichen OpenWhisk in der Dockervariante mit den drei WebAssembly Container Runtimes im Hinblick auf Kaltstartzeit, Performance und Speicherverbrauch in umfangreichen Experimenten. Auf einem Raspberry Pi, einem typischen low-end Edge Computer, erreichen unsere WebAssembly Container Runtimes einen 99.5\% schnelleren Kaltstart als Docker und einen 94\% schnelleren Start auf Serverhardware. Docker's Performance wird stark von der Kaltstartzeit beeinträchtigt, während der Durchsatz von WebAssembly Containern nicht spürbar davon beeinflusst wird. In einem Lasttest mit CPU- und I/O-gebundenen Funktionen erreichen unsere Container Runtimes mindestens 2,4 und bis zu 4,2 mal mehr Durchsatz als Docker. Insgesamt zeigt sich WebAssembly als geeignete Alternative für Serverless Plattformen durch den leichtgewichtigen Isolationsmechanismus, der schnelle Starts ermöglicht, sowie Unterstützung für vorzeitige Kompilierung zu schnellem nativen Maschinencode. Unser Ansatz ist daher ein aussichtsreicher Schritt hin zu latenzarmem Serverless Edge Computing.
+Wir vergleichen OpenWhisk in der Dockervariante mit den drei WebAssembly Container Runtimes im Hinblick auf Kaltstartzeit, Performance und Speicherverbrauch in umfangreichen Experimenten. Auf einem Raspberry Pi, einem typischen low-end Edge Computer, erreichen unsere WebAssembly Container Runtimes einen 99.5\% schnelleren Kaltstart als Docker und einen 94\% schnelleren Start auf Serverhardware. Docker's Performance wird stark von der Kaltstartzeit beeinträchtigt, während der Durchsatz von WebAssembly Containern nicht spürbar davon beeinflusst wird. In einem Lasttest mit CPU- und I/O-gebundenen Funktionen erreichen unsere Container Runtimes das 2,4- bis 4,2-fache des Durchsatzes von Docker. Insgesamt zeigt sich WebAssembly als geeignete Alternative für Serverless Plattformen durch den leichtgewichtigen Isolationsmechanismus, der schnelle Starts ermöglicht, sowie Unterstützung für vorzeitige Kompilierung zu schnellem nativen Maschinencode. Unser Ansatz ist daher ein aussichtsreicher Schritt hin zu latenzarmem Serverless Edge Computing.
 
 \end{kurzfassung}
 
