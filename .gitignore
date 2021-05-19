@@ -2,8 +2,8 @@
 # The pdf output
 thesis.pdf
 # Files that are generated
-figures/*.pdf
-figures/*.pgf
+#figures/*.pdf
+#figures/*.pgf
 
 ## Core latex/pdflatex auxiliary files:
 *.aux
